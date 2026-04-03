@@ -3,6 +3,20 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+import { 
+  useFonts, 
+  SpaceGrotesk_400Regular,
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold, 
+  SpaceGrotesk_700Bold 
+} from '@expo-google-fonts/space-grotesk';
+import { 
+  Inter_400Regular, 
+  Inter_500Medium, 
+  Inter_600SemiBold,
+  Inter_700Bold 
+} from '@expo-google-fonts/inter';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -21,6 +35,24 @@ export default function RootLayout() {
   const navigationStartedRef = useRef<boolean>(false);
   const router = useRouter();
   const segments = useSegments();
+  
+  const [fontsLoaded, fontError] = useFonts({
+    'SpaceGrotesk-Regular': SpaceGrotesk_400Regular,
+    'SpaceGrotesk-Medium': SpaceGrotesk_500Medium,
+    'SpaceGrotesk-SemiBold': SpaceGrotesk_600SemiBold,
+    'SpaceGrotesk-Bold': SpaceGrotesk_700Bold,
+    'Inter-Regular': Inter_400Regular,
+    'Inter-Medium': Inter_500Medium,
+    'Inter-SemiBold': Inter_600SemiBold,
+    'Inter-Bold': Inter_700Bold,
+  });
+
+  // Keep splash screen visible while fonts are loading
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
   
   // Use individual selectors to avoid object recreation on every render
   const initializeAuth = useAuthStore((state) => state.initializeAuth);
@@ -72,6 +104,14 @@ export default function RootLayout() {
   }, [isInitializing, isAuthenticated, segments, router]);
 
   // Always render the Stack immediately
+  if (!fontsLoaded && !fontError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0a1428', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#00D9FF" />
+      </View>
+    );
+  }
+
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack

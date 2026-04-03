@@ -7,34 +7,61 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { FontAwesome6 } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withRepeat, 
+  withTiming, 
+  withSequence,
+  interpolateColor
+} from 'react-native-reanimated';
+
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MetricCard } from '@/components/metric-card';
 import { AlertCard } from '@/components/alert-card';
 import { useDashboardStore } from '@/store/dashboardStore';
-import { useAuthStore } from '@/store/authStore';
 import { useAuth } from '@/hooks/useAuth';
+import { Theme } from '@/constants/styles';
 
-// Icon components - simplified (you can replace with icon library)
-const FleetIcon = () => (
-  <View style={{ width: 24, height: 24, backgroundColor: 'rgba(255, 255, 255, 0.2)', borderRadius: 4 }} />
-);
+const { width } = Dimensions.get('window');
 
-const DriverIcon = () => (
-  <View style={{ width: 24, height: 24, backgroundColor: 'rgba(0, 217, 255, 0.2)', borderRadius: 4 }} />
-);
+// Status Pulse Component
+const StatusPulse = () => {
+  const pulse = useSharedValue(0);
 
-const TruckIcon = () => (
-  <View style={{ width: 24, height: 24, backgroundColor: 'rgba(255, 255, 255, 0.2)', borderRadius: 4 }} />
-);
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1500 }),
+        withTiming(0, { duration: 1500 })
+      ),
+      -1,
+      true
+    );
+  }, []);
 
-const GaugeIcon = () => (
-  <View style={{ width: 24, height: 24, backgroundColor: 'rgba(255, 215, 0, 0.2)', borderRadius: 4 }} />
-);
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: pulse.value * 0.5 + 0.3,
+      transform: [{ scale: pulse.value * 0.5 + 1 }],
+      backgroundColor: Theme.colors.accent,
+    };
+  });
+
+  return (
+    <View style={styles.pulseContainer}>
+      <Animated.View style={[styles.pulseDot, animatedStyle]} />
+      <View style={[styles.innerDot, { backgroundColor: Theme.colors.accent }]} />
+    </View>
+  );
+};
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -43,7 +70,7 @@ export default function DashboardScreen() {
   const fetchInitiatedRef = useRef(false);
   const [activeTab, setActiveTab] = useState<'telemetry' | 'logs'>('telemetry');
   
-  // Store hooks - use individual selectors to prevent infinite loops
+  // Store selectors
   const dashboard = useDashboardStore((state) => state.dashboard);
   const alerts = useDashboardStore((state) => state.alerts);
   const isLoading = useDashboardStore((state) => state.isLoading);
@@ -54,7 +81,6 @@ export default function DashboardScreen() {
   const refreshDashboard = useDashboardStore((state) => state.refreshDashboard);
   const acknowledgeAlert = useDashboardStore((state) => state.acknowledgeAlert);
 
-  // Fetch dashboard only once on mount
   useEffect(() => {
     if (!fetchInitiatedRef.current) {
       fetchInitiatedRef.current = true;
@@ -62,62 +88,25 @@ export default function DashboardScreen() {
     }
   }, []);
 
-  // Handle pull-to-refresh
   const onRefresh = useCallback(() => {
     refreshDashboard();
-  }, []);
+  }, [refreshDashboard]);
 
-  // Handle alert action
-  const handleAlertAction = useCallback(
-    (alertId: string) => {
-      acknowledgeAlert(alertId);
-    },
-    []
-  );
+  const handleAlertAction = useCallback((id: string) => acknowledgeAlert(id), [acknowledgeAlert]);
 
-  // Handle logout
   const handleLogout = useCallback(() => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          onPress: () => {},
-          style: 'cancel',
-        },
-        {
-          text: 'Logout',
-          onPress: async () => {
-            await logout();
-            router.replace('/login');
-          },
-          style: 'destructive',
-        },
-      ]
-    );
-  }, []);
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', style: 'destructive', onPress: async () => { await logout(); router.replace('/login'); } },
+    ]);
+  }, [logout, router]);
 
   if (isLoading && !dashboard) {
     return (
       <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#00D9FF" />
-          <ThemedText style={styles.loadingText}>Loading dashboard...</ThemedText>
-        </View>
-      </ThemedView>
-    );
-  }
-
-  if (error && !dashboard) {
-    return (
-      <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.errorContainer}>
-          <ThemedText style={styles.errorTitle}>Unable to Load Dashboard</ThemedText>
-          <ThemedText style={styles.errorMessage}>{error}</ThemedText>
-          <TouchableOpacity style={styles.retryButton} onPress={() => fetchDashboard()}>
-            <ThemedText style={styles.retryButtonText}>Try Again</ThemedText>
-          </TouchableOpacity>
+          <ActivityIndicator size="large" color={Theme.colors.accent} />
+          <ThemedText style={styles.loadingText}>SYNCHRONIZING SYSTEM...</ThemedText>
         </View>
       </ThemedView>
     );
@@ -125,18 +114,15 @@ export default function DashboardScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header with notification and menu */}
+      {/* Premium Editorial Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={styles.logoSection}>
-            <FontAwesome6 name="shield" size={24} color="#A8B4FF" solid style={{ marginRight: 8 }} />
-            <ThemedText style={styles.logoText}>THE SENTINEL PROTOCOL</ThemedText>
+          <View style={styles.brandSection}>
+            <FontAwesome6 name="shield-halved" size={22} color={Theme.colors.accent} solid />
+            <ThemedText style={styles.brandText}>THE SENTINEL PROTOCOL</ThemedText>
           </View>
-          <TouchableOpacity 
-            onPress={handleLogout}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <FontAwesome6 name="bell" size={20} color="#00D9FF" />
+          <TouchableOpacity onPress={handleLogout} style={styles.iconButton}>
+            <FontAwesome6 name="power-off" size={18} color={Theme.colors.textMuted} />
           </TouchableOpacity>
         </View>
       </View>
@@ -144,181 +130,128 @@ export default function DashboardScreen() {
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={onRefresh}
-            tintColor="#00D9FF"
-            title="Pull to refresh"
-          />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={Theme.colors.accent} />
         }
       >
-        {/* Header Section */}
-        <View style={styles.headerSection}>
-          <View style={styles.statusBadge}>
-            <ThemedText style={styles.statusText}>SYSTEM STATUS: ACTIVE</ThemedText>
-            <View style={styles.statusDot} />
+        {/* Hero Section: The Vigilant Co-Pilot */}
+        <View style={styles.heroSection}>
+          <View style={styles.statusRow}>
+            <StatusPulse />
+            <ThemedText style={styles.statusLabel}>LIVE AI MONITORING ACTIVE</ThemedText>
           </View>
 
           <ThemedText style={styles.greeting}>Good Morning,</ThemedText>
-          <ThemedText style={styles.greetingName}>Commander</ThemedText>
-
-          {dashboard && (
-            <ThemedText style={styles.subGreeting}>
-              Fleet synchronization is at {Math.round(dashboard.safetyRating)}%. No critical bypasses detected in the last 6 operational hours.
-            </ThemedText>
-          )}
+          <ThemedText style={styles.commanderName}>Commander</ThemedText>
+          
+          <ThemedText style={styles.subGreeting}>
+            Fleet readiness is currently at <ThemedText style={{ color: Theme.colors.accent, fontFamily: Theme.fonts.technical }}>{dashboard?.fleetReadiness || 0}%</ThemedText>. 
+            No unauthorized protocol bypasses detected in the current sector.
+          </ThemedText>
         </View>
 
-        {/* Main Metrics */}
+        {/* Safety HUD: Glassmorphism */}
         {dashboard && (
-          <>
-            {/* Safety Rating */}
-            <View style={styles.metricsSection}>
-              <ThemedText style={styles.sectionTitle}>OVERALL SAFETY RATING</ThemedText>
-              <View style={styles.largeMetricCard}>
-                <View style={styles.circularProgress}>
-                  <ThemedText style={styles.progressValue}>
-                    {Math.round(dashboard.safetyRating)}%
-                  </ThemedText>
-                  <ThemedText style={styles.progressLabel}>OPTIMAL</ThemedText>
-                </View>
-                <View style={styles.metricsRow}>
-                  <View style={styles.miniMetric}>
-                    <ThemedText style={styles.miniLabel}>UPTIME</ThemedText>
-                    <ThemedText style={styles.miniValue}>82%</ThemedText>
-                  </View>
-                  <View style={styles.divider} />
-                  <View style={styles.miniMetric}>
-                    <ThemedText style={styles.miniLabel}>SAFETY</ThemedText>
-                    <ThemedText style={styles.miniValue}>95%</ThemedText>
-                  </View>
+          <View style={styles.hudContainer}>
+            <BlurView intensity={25} tint="dark" style={styles.glassCard}>
+              <View style={styles.hudHeader}>
+                <ThemedText style={styles.hudTitle}>OVERALL SAFETY SCORE</ThemedText>
+                <View style={styles.hudBadge}>
+                  <ThemedText style={styles.hudBadgeText}>OPTIMAL</ThemedText>
                 </View>
               </View>
-            </View>
 
-            {/* Fleet Readiness */}
-            <MetricCard
-              icon={<TruckIcon />}
-              title="Fleet Readiness"
-              value={dashboard.totalVehicles}
-              unit="/ 100 units"
-              percentage={dashboard.fleetReadiness}
-              status={dashboard.fleetReadiness >= 80 ? 'optimal' : 'warning'}
-            />
+              <View style={styles.scoreContainer}>
+                <ThemedText style={styles.scoreValue}>
+                  {Math.round(dashboard.safetyRating)}
+                </ThemedText>
+                <ThemedText style={styles.scoreUnit}>%</ThemedText>
+              </View>
 
-            {/* Active Drivers */}
-            <MetricCard
-              icon={<DriverIcon />}
-              title="Active Drivers"
-              value={dashboard.activeDrivers}
-              unit="Online"
-              percentage={(dashboard.activeDrivers / dashboard.totalDrivers) * 100}
-              status="optimal"
-            />
-
-            {/* Fuel Efficiency */}
-            <MetricCard
-              icon={<GaugeIcon />}
-              title="Fuel Efficiency"
-              value={dashboard.fuelEfficiency.toFixed(1)}
-              unit="km/L Avg"
-              percentage={dashboard.fuelEfficiency * 10}
-              status={dashboard.fuelEfficiency > 8 ? 'optimal' : 'warning'}
-            />
-          </>
+              <View style={styles.hudMetricsRow}>
+                <View style={styles.hudMiniMetric}>
+                  <ThemedText style={styles.miniLabel}>FLEET UPTIME</ThemedText>
+                  <ThemedText style={styles.miniValue}>98.2%</ThemedText>
+                </View>
+                <View style={styles.hudDivider} />
+                <View style={styles.hudMiniMetric}>
+                  <ThemedText style={styles.miniLabel}>OPS STABILITY</ThemedText>
+                  <ThemedText style={styles.miniValue}>ALPHA-1</ThemedText>
+                </View>
+              </View>
+            </BlurView>
+          </View>
         )}
 
-        {/* Live Telemetry Feed Section */}
-        <View style={styles.telemetrySection}>
-          <View style={styles.telemetryTabs}>
-            <TouchableOpacity 
-              style={[styles.tab, activeTab === 'telemetry' && styles.activeTab]}
-              onPress={() => setActiveTab('telemetry')}
-            >
-              <ThemedText style={[styles.tabText, activeTab === 'telemetry' && styles.activeTabText]}>
-                LIVE TELEMETRY FEED
-              </ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.tab, activeTab === 'logs' && styles.activeTab]}
-              onPress={() => setActiveTab('logs')}
-            >
-              <ThemedText style={[styles.tabText, activeTab === 'logs' && styles.activeTabText]}>
-                VIEW SYSTEM LOGS
-              </ThemedText>
-            </TouchableOpacity>
+        {/* Technical Data Grid: No Lines, Just Surfaces */}
+        <View style={styles.sectionContainer}>
+          <ThemedText style={styles.sectionLabel}>OPERATIONAL TELEMETRY</ThemedText>
+          <View style={styles.metricsGrid}>
+            {dashboard && (
+              <>
+                <MetricCard
+                  title="Units Deployed"
+                  value={dashboard.activeDrivers}
+                  unit={`/ ${dashboard.totalDrivers}`}
+                  percentage={(dashboard.activeDrivers / dashboard.totalDrivers) * 100}
+                  icon={<FontAwesome6 name="user-astronaut" size={16} color={Theme.colors.accent} />}
+                />
+                <MetricCard
+                  title="Asset Readiness"
+                  value={dashboard.totalVehicles}
+                  unit="Active"
+                  percentage={dashboard.fleetReadiness}
+                  status={dashboard.fleetReadiness >= 80 ? 'optimal' : 'warning'}
+                  icon={<FontAwesome6 name="truck-ramp-box" size={16} color={Theme.colors.accent} />}
+                />
+                <MetricCard
+                  title="Energy Efficiency"
+                  value={dashboard.fuelEfficiency.toFixed(1)}
+                  unit="KM/L AVG"
+                  percentage={dashboard.fuelEfficiency * 10}
+                  icon={<FontAwesome6 name="bolt-lightning" size={16} color={Theme.colors.accent} />}
+                />
+              </>
+            )}
           </View>
-
-          {activeTab === 'telemetry' && (
-            <View style={styles.tabContent}>
-              {dashboard?.recentAlerts && dashboard.recentAlerts.slice(0, 2).map((item, idx) => (
-                <View key={idx} style={styles.telemetryItem}>
-                  <View style={styles.telemetryIcon}>
-                    <FontAwesome6 name={idx === 0 ? 'satellite' : 'key'} size={14} color="#00D9FF" />
-                  </View>
-                  <View style={styles.telemetryContent}>
-                    <ThemedText style={styles.telemetryLabel}>
-                      {idx === 0 ? 'SET LINK ACTIVE' : 'PROTOCOL CHECK'}
-                    </ThemedText>
-                    <ThemedText style={styles.telemetryValue}>
-                      {idx === 0 ? 'Sector 7-G Synchronized' : 'Sentinel Core Encrypted'}
-                    </ThemedText>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {activeTab === 'logs' && (
-            <View style={styles.tabContent}>
-              <ThemedText style={styles.logMessage}>
-                System logs are currently being processed. Check back soon for updates.
-              </ThemedText>
-            </View>
-          )}
         </View>
 
-        {/* Critical Intelligence Section */}
-        {alerts && alerts.length > 0 && (
-          <View style={styles.criticalSection}>
-            <View style={styles.criticalHeader}>
-              <ThemedText style={styles.criticalTitle}>Critical Intelligence</ThemedText>
-              <View style={styles.priorityBadge}>
-                <ThemedText style={styles.priorityText}>
-                  {alerts.filter((a) => a.severity === 'high').length} PRIORITY ALERTS
-                </ThemedText>
+        {/* Intelligence Feed */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.intelligenceHeader}>
+            <ThemedText style={styles.sectionLabel}>CRITICAL INTELLIGENCE</ThemedText>
+            {alerts && alerts.length > 0 && (
+              <View style={styles.alertCounter}>
+                <ThemedText style={styles.alertCounterText}>{alerts.filter(a => a.severity === 'high').length} PRIORITY</ThemedText>
               </View>
-            </View>
+            )}
+          </View>
 
-            {alerts.slice(0, 5).map((alert) => (
+          {alerts && alerts.length > 0 ? (
+            alerts.slice(0, 3).map((alert) => (
               <AlertCard
                 key={alert.id}
                 alert={alert}
                 onAction={() => handleAlertAction(alert.id)}
-                actionText={
-                  alert.severity === 'high'
-                    ? 'EMERGENCY CALL'
-                    : alert.severity === 'medium'
-                      ? 'INVESTIGATE'
-                      : 'ACKNOWLEDGE'
-                }
+                actionText={alert.severity === 'high' ? 'ENGAGE' : 'ACKNOWLEDGE'}
               />
-            ))}
-          </View>
-        )}
+            ))
+          ) : (
+            <View style={styles.emptyIntelligence}>
+              <ThemedText style={styles.emptyText}>SECURE SECTOR. NO CRITICAL ALERTS.</ThemedText>
+            </View>
+          )}
+        </View>
 
-        {/* Last Refresh Time */}
-        {lastRefreshTime && (
-          <View style={styles.footerInfo}>
-            <ThemedText style={styles.footerText}>
-              Last updated: {new Date(lastRefreshTime).toLocaleTimeString()}
-            </ThemedText>
-          </View>
-        )}
-
-        {/* Bottom Spacing */}
-        <View style={{ height: 20 }} />
+        {/* System Logs Footer */}
+        <View style={styles.footer}>
+          <View style={styles.footerDecoration} />
+          <ThemedText style={styles.lastSync}>
+            SYSTEM LAST SYNCHRONIZED: {lastRefreshTime ? new Date(lastRefreshTime).toLocaleTimeString() : 'PENDING'}
+          </ThemedText>
+          <ThemedText style={styles.protocolVersion}>ENCRYPTION: AES-256 | PROTOCOL: SENTINEL-V4</ThemedText>
+        </View>
       </ScrollView>
     </ThemedView>
   );
@@ -327,285 +260,260 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a1428',
+    backgroundColor: Theme.colors.background,
   },
   header: {
-    backgroundColor: 'rgba(0, 217, 255, 0.05)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 217, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderBottomWidth: 0.5,
+    borderBottomColor: Theme.colors.outlineVariant,
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  logoSection: {
+  brandSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
   },
-  logoText: {
+  brandText: {
+    fontFamily: Theme.fonts.headline,
     fontSize: 12,
-    fontWeight: '700',
-    color: '#A8B4FF',
-    letterSpacing: 1,
+    color: Theme.colors.textSecondary,
+    letterSpacing: 2,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Theme.colors.surfaceContainerHigh,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollView: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 20,
   },
   loadingText: {
-    marginTop: 12,
-    color: '#FFFFFF',
+    fontFamily: Theme.fonts.technical,
+    fontSize: 12,
+    color: Theme.colors.textMuted,
+    letterSpacing: 2,
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  heroSection: {
     paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 24,
   },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  errorMessage: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.7,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  retryButton: {
-    backgroundColor: 'rgba(0, 217, 255, 0.2)',
-    borderWidth: 1,
-    borderColor: '#00D9FF',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  retryButtonText: {
-    color: '#00D9FF',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  headerSection: {
-    marginBottom: 24,
-  },
-  statusBadge: {
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-    backgroundColor: 'rgba(0, 217, 255, 0.1)',
+    marginBottom: 20,
+    backgroundColor: 'rgba(0, 217, 255, 0.08)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
     alignSelf: 'flex-start',
   },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#00D9FF',
+  statusLabel: {
+    fontFamily: Theme.fonts.label,
+    fontSize: 9,
+    color: Theme.colors.accent,
+    letterSpacing: 1.5,
+    marginLeft: 8,
   },
-  statusDot: {
+  pulseContainer: {
+    width: 8,
+    height: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pulseDot: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  innerDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#00D9FF',
   },
   greeting: {
-    fontSize: 26,
-    color: '#FFFFFF',
-    opacity: 0.7,
+    fontFamily: Theme.fonts.body,
+    fontSize: 24,
+    color: Theme.colors.textMuted,
     marginBottom: 4,
   },
-  greetingName: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#00D9FF',
-    marginBottom: 12,
+  commanderName: {
+    fontFamily: Theme.fonts.display,
+    fontSize: 42,
+    color: Theme.colors.text,
+    marginBottom: 16,
   },
   subGreeting: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    opacity: 0.6,
-    lineHeight: 16,
+    fontFamily: Theme.fonts.body,
+    fontSize: 14,
+    color: Theme.colors.textSecondary,
+    lineHeight: 22,
+    opacity: 0.8,
   },
-  metricsSection: {
-    marginBottom: 24,
+  hudContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 32,
   },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.5,
-    marginBottom: 12,
-    letterSpacing: 1.5,
-  },
-  largeMetricCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: 20,
+  glassCard: {
+    borderRadius: Theme.roundness.xl,
+    padding: 24,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
-  circularProgress: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  progressValue: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  progressLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#00D9FF',
-    marginTop: 4,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  miniMetric: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  divider: {
-    width: 1,
-    height: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    marginHorizontal: 12,
-  },
-  miniLabel: {
-    fontSize: 10,
-    color: '#FFFFFF',
-    opacity: 0.6,
-    marginBottom: 4,
-  },
-  miniValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  telemetrySection: {
-    marginVertical: 24,
-  },
-  telemetryTabs: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 217, 255, 0.2)',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomColor: '#00D9FF',
-  },
-  tabText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.5,
-  },
-  activeTabText: {
-    color: '#00D9FF',
-    opacity: 1,
-  },
-  tabContent: {
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderRadius: 8,
-    padding: 12,
-  },
-  telemetryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingHorizontal: 8,
-  },
-  telemetryIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0, 217, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  telemetryContent: {
-    flex: 1,
-  },
-  telemetryLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.6,
-    marginBottom: 2,
-  },
-  telemetryValue: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#FFFFFF',
-  },
-  logMessage: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    opacity: 0.6,
-    textAlign: 'center',
-    paddingVertical: 16,
-  },
-  criticalSection: {
-    marginTop: 24,
-    marginBottom: 24,
-  },
-  criticalHeader: {
+  hudHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
-  criticalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  priorityBadge: {
-    backgroundColor: 'rgba(255, 107, 107, 0.2)',
-    borderRadius: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  priorityText: {
+  hudTitle: {
+    fontFamily: Theme.fonts.label,
     fontSize: 10,
-    fontWeight: '600',
-    color: '#FF6B6B',
+    color: Theme.colors.textMuted,
+    letterSpacing: 2,
   },
-  footerInfo: {
-    paddingVertical: 12,
+  hudBadge: {
+    backgroundColor: Theme.colors.success,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  hudBadgeText: {
+    fontFamily: Theme.fonts.label,
+    fontSize: 8,
+    fontWeight: '700',
+    color: Theme.colors.onSuccess,
+  },
+  scoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 24,
+  },
+  scoreValue: {
+    fontFamily: Theme.fonts.display,
+    fontSize: 64,
+    color: Theme.colors.text,
+  },
+  scoreUnit: {
+    fontFamily: Theme.fonts.title,
+    fontSize: 24,
+    color: Theme.colors.accent,
+    marginLeft: 4,
+  },
+  hudMetricsRow: {
+    flexDirection: 'row',
+    height: 40,
     alignItems: 'center',
   },
-  footerText: {
-    fontSize: 11,
-    color: '#FFFFFF',
-    opacity: 0.4,
+  hudMiniMetric: {
+    flex: 1,
   },
+  hudDivider: {
+    width: 1,
+    height: '60%',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 20,
+  },
+  miniLabel: {
+    fontFamily: Theme.fonts.label,
+    fontSize: 9,
+    color: Theme.colors.textMuted,
+    marginBottom: 4,
+  },
+  miniValue: {
+    fontFamily: Theme.fonts.technical,
+    fontSize: 16,
+    color: Theme.colors.text,
+  },
+  sectionContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 32,
+  },
+  sectionLabel: {
+    fontFamily: Theme.fonts.label,
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    letterSpacing: 2,
+    marginBottom: 20,
+    opacity: 0.6,
+  },
+  metricsGrid: {
+    gap: 4, // Tight layout for sectional feel
+  },
+  intelligenceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  alertCounter: {
+    backgroundColor: 'rgba(186, 26, 26, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginBottom: 20,
+  },
+  alertCounterText: {
+    fontFamily: Theme.fonts.label,
+    fontSize: 9,
+    color: Theme.colors.error,
+    fontWeight: '700',
+  },
+  emptyIntelligence: {
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    padding: 24,
+    borderRadius: Theme.roundness.md,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontFamily: Theme.fonts.technical,
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    opacity: 0.5,
+  },
+  footer: {
+    marginTop: 20,
+    paddingHorizontal: 40,
+    alignItems: 'center',
+    gap: 8,
+  },
+  footerDecoration: {
+    width: 40,
+    height: 2,
+    backgroundColor: Theme.colors.outlineVariant,
+    marginBottom: 12,
+  },
+  lastSync: {
+    fontFamily: Theme.fonts.technical,
+    fontSize: 9,
+    color: Theme.colors.textMuted,
+    letterSpacing: 1,
+  },
+  protocolVersion: {
+    fontFamily: Theme.fonts.technical,
+    fontSize: 8,
+    color: Theme.colors.textMuted,
+    opacity: 0.3,
+  }
 });

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, ViewStyle, TouchableOpacity } from 'react-native';
 import { ThemedText } from './themed-text';
 import { DashboardAlert } from '../services/dashboardService';
+import { Theme } from '@/constants/styles';
 
 interface AlertCardProps {
   alert: DashboardAlert;
@@ -13,13 +14,13 @@ interface AlertCardProps {
 const getSeverityColor = (severity: DashboardAlert['severity']) => {
   switch (severity) {
     case 'high':
-      return '#FF6B6B';
+      return Theme.colors.error;
     case 'medium':
       return '#FFD700';
     case 'low':
-      return '#00D9FF';
+      return Theme.colors.accent;
     default:
-      return '#FFFFFF';
+      return Theme.colors.text;
   }
 };
 
@@ -61,12 +62,12 @@ const getTimeAgo = (timestamp: string): string => {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
 
-    if (diffMins < 1) return '< 1 minute ago';
-    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffMins < 1) return '< 1m ago';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
     return date.toLocaleDateString();
   } catch {
-    return 'Recently';
+    return 'RECENT';
   }
 };
 
@@ -79,83 +80,85 @@ export const AlertCard: React.FC<AlertCardProps> = ({
   const severityColor = getSeverityColor(alert.severity);
 
   return (
-    <View
-      style={[
-        styles.card,
-        { borderLeftColor: severityColor },
-        style,
-      ]}
-    >
-      {/* Header: Severity and Time */}
-      <View style={styles.header}>
-        <View style={styles.severityBadge}>
-          <View
-            style={[
-              styles.severityDot,
-              { backgroundColor: severityColor },
-            ]}
-          />
-          <ThemedText style={styles.severityText}>
-            {getSeverityLabel(alert.severity)}
+    <View style={[styles.card, style]}>
+      {/* Ghost Border Indicator */}
+      <View style={[styles.ghostBorder, { backgroundColor: severityColor }]} />
+      
+      <View style={styles.cardContent}>
+        {/* Header: Severity and Time */}
+        <View style={styles.header}>
+          <View style={styles.severityBadge}>
+            <View style={[styles.severityDot, { backgroundColor: severityColor }]} />
+            <ThemedText style={styles.severityText}>
+              {getSeverityLabel(alert.severity)}
+            </ThemedText>
+          </View>
+          <ThemedText style={styles.timeText}>
+            {getTimeAgo(alert.timestamp)}
           </ThemedText>
         </View>
-        <ThemedText style={styles.timeText}>
-          {getTimeAgo(alert.timestamp)}
+
+        {/* Alert Type and Description */}
+        <ThemedText style={styles.alertType}>
+          {getAlertTypeLabel(alert.type)}
         </ThemedText>
-      </View>
-
-      {/* Alert Type and Description */}
-      <ThemedText style={styles.alertType}>
-        {getAlertTypeLabel(alert.type)}
-      </ThemedText>
-      
-      <ThemedText style={styles.description}>
-        {alert.description}
-      </ThemedText>
-
-      {/* Unit Info */}
-      {alert.unitId && (
-        <ThemedText style={styles.unitInfo}>
-          Unit {alert.unitId}
+        
+        <ThemedText style={styles.description}>
+          {alert.description}
         </ThemedText>
-      )}
 
-      {/* Action Button */}
-      {onAction && (
-        <TouchableOpacity
-          style={[styles.actionButton, { borderColor: severityColor }]}
-          onPress={onAction}
-          activeOpacity={0.7}
-        >
-          <ThemedText style={[styles.actionText, { color: severityColor }]}>
-            {actionText}
+        {/* Footer: Unit and Action */}
+        <View style={styles.footer}>
+          <ThemedText style={styles.unitInfo}>
+            UNIT-{alert.unitId || 'UNKNOWN'}
           </ThemedText>
-        </TouchableOpacity>
-      )}
+          
+          {onAction && (
+            <TouchableOpacity
+              style={[styles.actionButton, { borderColor: severityColor + '40' }]}
+              onPress={onAction}
+              activeOpacity={0.7}
+            >
+              <ThemedText style={[styles.actionText, { color: severityColor }]}>
+                {actionText.toUpperCase()}
+              </ThemedText>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderLeftWidth: 4,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderRadius: Theme.roundness.md,
+    marginBottom: 16,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  ghostBorder: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    opacity: 0.8,
+  },
+  cardContent: {
+    padding: 16,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   severityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   severityDot: {
     width: 6,
@@ -163,44 +166,51 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   severityText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.8,
+    fontSize: 9,
+    fontFamily: Theme.fonts.label,
+    color: Theme.colors.textMuted,
+    letterSpacing: 1,
   },
   timeText: {
     fontSize: 10,
-    color: '#FFFFFF',
-    opacity: 0.5,
+    fontFamily: Theme.fonts.technical,
+    color: Theme.colors.textMuted,
   },
   alertType: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: Theme.fonts.headline,
+    color: Theme.colors.text,
     marginBottom: 6,
   },
   description: {
     fontSize: 12,
-    color: '#FFFFFF',
-    opacity: 0.7,
-    lineHeight: 16,
-    marginBottom: 8,
+    fontFamily: Theme.fonts.body,
+    color: Theme.colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   unitInfo: {
-    fontSize: 11,
-    color: '#FFFFFF',
-    opacity: 0.5,
-    marginBottom: 10,
+    fontSize: 10,
+    fontFamily: Theme.fonts.technical,
+    color: Theme.colors.accent,
+    letterSpacing: 1,
   },
   actionButton: {
     borderWidth: 1,
-    borderRadius: 6,
-    paddingVertical: 8,
+    borderRadius: Theme.roundness.sm,
+    paddingVertical: 6,
     paddingHorizontal: 12,
-    alignItems: 'center',
+    backgroundColor: Theme.colors.surfaceContainerLow,
   },
   actionText: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10,
+    fontFamily: Theme.fonts.label,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
