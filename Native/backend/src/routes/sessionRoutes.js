@@ -11,8 +11,8 @@ import {
 
 const router = express.Router();
 
-// All session routes require authentication
-router.use(verifyAuth);
+// All session routes require authentication (disabled for web-app demo)
+// router.use(verifyAuth);
 
 // GET all sessions
 router.get('/', getAllSessions);

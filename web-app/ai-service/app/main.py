@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.db import connect_to_mongo, close_mongo_connection
+from app.socket_client import socket_manager
 from app.routes import router
 from app.utils import logger
 
@@ -12,6 +13,7 @@ from app.utils import logger
 async def lifespan(app: FastAPI):
     logger.info("Starting up Driver Safety Microservice...")
     await connect_to_mongo()
+    await socket_manager.connect()
     yield
     logger.info("Shutting down microservice...")
     await close_mongo_connection()

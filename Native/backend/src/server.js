@@ -8,19 +8,36 @@ import driverRoutes from './routes/driverRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import { connectDB } from './config/database.js';
 
+import http from 'http';
+import { initSocket } from './utils/socketHandler.js';
+
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
+
+// Initialize Socket.io
+initSocket(server);
 
 // Middleware
 app.use(cors({
-  origin: [
-    'http://localhost:8081',
-    'http://localhost:3000',
-    'exp://localhost:8081',
-    '*' // Allow all origins for development
-  ],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    // Check if the origin matches our allowed list or is a development origin
+    const allowedPorts = ['8081', '3000', '5173', '19000'];
+    const isLocal = origin.includes('localhost') || 
+                    origin.includes('127.0.0.1') || 
+                    origin.includes('192.168.');
+    
+    if (isLocal || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 
@@ -54,7 +71,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
   console.log(`📝 API Documentation:`);
   console.log(`   Authentication:`);

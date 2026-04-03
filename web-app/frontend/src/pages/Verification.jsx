@@ -20,18 +20,25 @@ const Verification = () => {
     }
   }, [selectedDriver, navigate]);
 
+  const [stream, setStream] = useState(null);
+
   const startCamera = async () => {
     try {
-      const stream = await cameraUtils.requestCamera();
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setIsCameraActive(true);
-      }
+      const newStream = await cameraUtils.requestCamera();
+      setStream(newStream);
+      setIsCameraActive(true);
     } catch (error) {
       console.error('Camera access error:', error);
       setError('Camera access denied. Please allow camera permissions.');
     }
   };
+
+  // Attach stream when video element is ready
+  useEffect(() => {
+    if (isCameraActive && stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [isCameraActive, stream]);
 
   const capturePhoto = () => {
     if (!videoRef.current) return;
@@ -54,38 +61,43 @@ const Verification = () => {
     setError(null);
 
     try {
-      const storedImageBase64 = selectedDriver.profile_image.includes(',')
-        ? selectedDriver.profile_image.split(',')[1]
-        : selectedDriver.profile_image;
+      const storedImage = selectedDriver.profilePhoto;
       const capturedImageBase64 = capturedImage.split(',')[1];
 
+      // Call AI Service for face verification
       const result = await apiService.verifyDriver(
-        selectedDriver.id,
-        storedImageBase64,
+        storedImage,
         capturedImageBase64
       );
 
+      console.log('🔍 Verification result:', result);
+
       if (result.verified) {
         setVerifiedDriver(selectedDriver);
-        navigate('/vehicle-selection');
+        // Add a small delay for user to see success
+        setTimeout(() => {
+          navigate('/vehicle-selection');
+        }, 1000);
       } else {
-        setError('Face verification failed. Please try again.');
+        setError(result.message || 'Face not matched. Please try again.');
       }
     } catch (error) {
       console.error('Verification error:', error);
-      setError('Verification failed. Please try again.');
+      setError(error.message || 'Verification failed. Please ensure your face is clearly visible.');
     } finally {
       setIsVerifying(false);
     }
   };
 
   const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject;
+    if (stream) {
       stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-      setIsCameraActive(false);
+      setStream(null);
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraActive(false);
   };
 
   useEffect(() => () => stopCamera(), []);
@@ -100,13 +112,13 @@ const Verification = () => {
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <div className="flex items-center space-x-6 mb-6">
             <img
-              src={selectedDriver.profile_image}
-              alt="Stored"
-              className="w-32 h-32 rounded-lg object-cover"
+              src={selectedDriver.profilePhoto || '/default-avatar.png'}
+              alt={`${selectedDriver.firstName} ${selectedDriver.lastName}`}
+              className="w-32 h-32 rounded-lg object-cover border-2 border-blue-500 shadow-lg"
             />
             <div>
-              <h2 className="text-2xl font-semibold">{selectedDriver.name}</h2>
-              <p className="text-gray-400">Please position your face in front of the camera</p>
+              <h2 className="text-3xl font-bold text-blue-400">{selectedDriver.firstName} {selectedDriver.lastName}</h2>
+              <p className="text-gray-300 font-medium">Position your face clearly in the camera frame</p>
             </div>
           </div>
 

@@ -7,6 +7,9 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuthStore } from '@/store/authStore';
+import { socketService } from '@/services/socketService';
+import { useAlerts } from '@/hooks/useAlerts';
+import { AlertModal } from '@/components/AlertModal';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -23,6 +26,9 @@ export default function RootLayout() {
   const initializeAuth = useAuthStore((state) => state.initializeAuth);
   const isInitializing = useAuthStore((state) => state.isInitializing);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const token = useAuthStore((state) => state.token);
+
+  const { currentAlert, clearAlert } = useAlerts();
 
   // Initialize auth only once
   useEffect(() => {
@@ -31,6 +37,17 @@ export default function RootLayout() {
       initializeAuth();
     }
   }, [initializeAuth]);
+
+  // Handle socket connection based on auth state
+  useEffect(() => {
+    if (isAuthenticated && token) {
+      console.log('⚡ RootLayout: Authenticated, connecting socket...');
+      socketService.connect(token);
+    } else if (!isAuthenticated) {
+      console.log('🔌 RootLayout: Not authenticated, disconnecting socket...');
+      socketService.disconnect();
+    }
+  }, [isAuthenticated, token]);
 
   // Handle routing based on auth state (only after auth is done initializing)
   useEffect(() => {
@@ -85,12 +102,21 @@ export default function RootLayout() {
           options={{
             headerShown: false,
             presentation: 'card',
-            animationEnabled: true,
+            animation: 'slide_from_right',
           }}
         />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />
+      <AlertModal 
+        isVisible={!!currentAlert} 
+        alert={currentAlert} 
+        onClose={clearAlert} 
+        onAcknowledge={() => {
+          console.log('👍 Alert acknowledged');
+          // Add any specific acknowledgement logic here if needed
+        }}
+      />
     </ThemeProvider>
   );
 }

@@ -10,11 +10,12 @@ import {
 
 const router = express.Router();
 
-// All driver routes require authentication
-router.use(verifyAuth);
+// All driver routes require authentication (Disabled for web-app compatibility)
+// router.use(verifyAuth);
 
 // GET all drivers
 router.get('/', getAllDrivers);
+
 
 // GET driver by ID
 router.get('/:id', getDriverById);

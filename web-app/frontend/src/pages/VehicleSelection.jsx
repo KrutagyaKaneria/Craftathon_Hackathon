@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAppStore from '../store/appStore.js';
 import apiService from '../services/api.js';
+import useSocket from '../hooks/useSocket.js';
 
 const VehicleSelection = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { verifiedDriver, vehicles, setVehicles, setSelectedVehicle, setSession } = useAppStore();
+  
+  // Use Socket.io for real-time synchronization
+  useSocket(verifiedDriver?.ownerId);
 
   useEffect(() => {
     if (!verifiedDriver) {
@@ -15,65 +19,129 @@ const VehicleSelection = () => {
       return;
     }
 
-    // Replace with backend endpoint when available.
-    const mockVehicles = [
-      { id: 1, number: 'BUS-001', type: 'City Bus', capacity: 50 },
-      { id: 2, number: 'BUS-002', type: 'Express Bus', capacity: 40 },
-      { id: 3, number: 'BUS-003', type: 'Mini Bus', capacity: 25 },
-    ];
-    setVehicles(mockVehicles);
-    setLoading(false);
-  }, [verifiedDriver, navigate]);
+    const fetchVehicles = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const vehicleList = await apiService.getAvailableVehicles(verifiedDriver.ownerId);
+        setVehicles(vehicleList);
+      } catch (error) {
+        console.error('Failed to fetch vehicles:', error);
+        setError(error.message || 'Unable to load available buses');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchVehicles();
+  }, [verifiedDriver, navigate, setVehicles]);
 
   const handleVehicleSelect = async (vehicle) => {
     try {
       setError('');
-      setSelectedVehicle(vehicle);
-      const session = await apiService.startSession(verifiedDriver.id, vehicle.id);
-      setSession(session);
-      navigate('/dashboard');
+      setLoading(true);
+      
+      // Atomic locking on backend
+      const result = await apiService.lockVehicle(vehicle._id || vehicle.id, verifiedDriver._id || verifiedDriver.id, verifiedDriver.ownerId);
+      
+      if (result.success) {
+        setSelectedVehicle(result.data);
+        // Start building the session
+        const sessionResult = await apiService.startSession(verifiedDriver._id || verifiedDriver.id, vehicle._id || vehicle.id, verifiedDriver.ownerId);
+        setSession(sessionResult.data || sessionResult);
+        navigate('/dashboard');
+      }
     } catch (error) {
-      console.error('Failed to start session:', error);
-      setError(error.message || 'Failed to start driving session');
+      console.error('Failed to allocate vehicle:', error);
+      setError(error.message || 'Bus already selected by another driver');
+      
+      // Refresh list to remove the taken bus
+      const vehicleList = await apiService.getAvailableVehicles(verifiedDriver.ownerId);
+      setVehicles(vehicleList);
+    } finally {
+      setLoading(false);
     }
   };
 
   if (!verifiedDriver) return null;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-      <div className="max-w-4xl w-full p-8">
-        <h1 className="text-4xl font-bold text-center mb-8">Select Vehicle</h1>
-        <p className="text-center text-gray-400 mb-8">
-          Welcome, {verifiedDriver.name}. Please select your assigned vehicle.
-        </p>
+    <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4">
+      <div className="max-w-6xl w-full">
+        <div className="text-center mb-10">
+          <h1 className="text-5xl font-extrabold text-blue-500 mb-4">Bus Allocation</h1>
+          <div className="flex items-center justify-center space-x-3 text-2xl">
+            <span className="text-gray-400">Driver:</span>
+            <span className="text-white font-semibold">{verifiedDriver.firstName} {verifiedDriver.lastName}</span>
+            <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm font-mono tracking-wider uppercase border border-green-500/30">Verified</span>
+          </div>
+        </div>
 
-        {loading ? (
-          <div className="text-center">Loading vehicles...</div>
+        {error && (
+          <div className="mb-8 p-4 bg-red-500/20 border border-red-500/50 text-red-100 rounded-xl flex items-center space-x-3 shadow-lg animate-pulse">
+            <span className="text-2xl">⚠️</span>
+            <p className="font-medium text-lg">{error}</p>
+          </div>
+        )}
+
+        {loading && vehicles.length === 0 ? (
+          <div className="flex flex-col items-center justify-center space-y-4 py-20">
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-blue-400 font-medium text-xl">Fetching available fleet...</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {vehicles.map((vehicle) => (
               <div
-                key={vehicle.id}
+                key={vehicle._id || vehicle.id}
                 onClick={() => handleVehicleSelect(vehicle)}
-                className="bg-gray-800 rounded-lg p-6 cursor-pointer hover:bg-gray-700 transition-colors"
+                className="group relative bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 cursor-pointer border-2 border-gray-700 hover:border-blue-500 transition-all duration-300 hover:shadow-[0_0_30px_rgba(59,130,246,0.2)] transform hover:-translate-y-2 overflow-hidden"
               >
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl">🚌</span>
-                  </div>
-                  <h2 className="text-xl font-semibold">{vehicle.number}</h2>
-                  <p className="text-gray-400">{vehicle.type}</p>
-                  <p className="text-sm text-gray-500">Capacity: {vehicle.capacity}</p>
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                  <span className="text-6xl">🚌</span>
                 </div>
+                
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-6">
+                    <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase border border-blue-500/30">
+                      Available
+                    </span>
+                    <span className="text-gray-500 font-mono">#{vehicle.vehicle_number}</span>
+                  </div>
+                  
+                  <h2 className="text-3xl font-bold text-white mb-2 group-hover:text-blue-400 transition-colors">
+                    {vehicle.vehicle_name || vehicle.number || 'Standard Bus'}
+                  </h2>
+                  <p className="text-gray-400 mb-6 text-lg">{vehicle.model || 'Route A-102'}</p>
+                  
+                  <div className="grid grid-cols-2 gap-4 border-t border-gray-700/50 pt-6">
+                    <div className="flex flex-col">
+                      <span className="text-gray-500 text-xs uppercase font-bold tracking-tighter">Mileage</span>
+                      <span className="text-white font-medium">{vehicle.mileage || '42k'} km</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-gray-500 text-xs uppercase font-bold tracking-tighter">Fuel</span>
+                      <span className="text-green-400 font-medium">{vehicle.fuel_level || '85'}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-600 to-purple-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
               </div>
             ))}
           </div>
         )}
-        {error && <div className="mt-6 rounded-lg bg-red-600 px-4 py-3 text-sm">{error}</div>}
+
+        {vehicles.length === 0 && !loading && (
+          <div className="text-center py-20 bg-gray-800/30 rounded-3xl border border-dashed border-gray-700">
+            <span className="text-8xl mb-6 block">🚧</span>
+            <h3 className="text-2xl font-bold text-gray-300">No buses available right now</h3>
+            <p className="text-gray-500 max-w-md mx-auto mt-2">All vehicles are currently in-use or in maintenance. Please wait for a bus to be released.</p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-export default VehicleSelection;
+export default VehicleSelection;

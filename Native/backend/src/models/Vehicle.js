@@ -35,8 +35,8 @@ const VehicleSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'inactive', 'maintenance', 'decommissioned'],
-      default: 'active'
+      enum: ['active', 'inactive', 'maintenance', 'decommissioned', 'available', 'in-use'],
+      default: 'available'
     },
     protocol_status: {
       type: String,

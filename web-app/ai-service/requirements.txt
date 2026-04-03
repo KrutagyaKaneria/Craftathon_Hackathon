@@ -7,3 +7,5 @@ numpy>=1.25.2
 httpx>=0.25.0
 pydantic-settings>=2.0.3
 python-dotenv>=1.0.0
+deepface>=0.0.92
+tf-keras>=2.16.0

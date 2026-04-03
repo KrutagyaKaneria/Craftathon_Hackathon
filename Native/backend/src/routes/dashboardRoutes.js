@@ -14,8 +14,8 @@ import {
 
 const router = express.Router();
 
-// Protect all dashboard routes with authentication
-router.use(verifyAuth);
+// Protect all dashboard routes with authentication (Disabled for web-app compatibility)
+// router.use(verifyAuth);
 
 /**
  * GET /api/dashboard

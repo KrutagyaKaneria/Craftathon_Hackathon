@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     # Push Notification / Central Backend Config
     BACKEND_URL: Optional[str] = "http://localhost:8000/api/v1/events"
+    SOCKET_URL: str = "http://localhost:5000"
 
     # Thresholds for AI detection
     FATIGUE_EAR_THRESHOLD: float = 0.25 # Typical threshold for closed eyes

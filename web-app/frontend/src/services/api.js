@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const backendApi = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL: 'http://localhost:5000/api',
 });
 
 const aiApi = axios.create({
@@ -9,7 +9,7 @@ const aiApi = axios.create({
 });
 
 const getErrorMessage = (error, fallback) => {
-  const detail = error?.response?.data?.detail;
+  const detail = error?.response?.data?.detail || error?.response?.data?.message;
   if (Array.isArray(detail)) {
     return detail.map((entry) => entry?.msg || 'Validation error').join(', ');
   }
@@ -20,30 +20,55 @@ export const apiService = {
   getDrivers: async () => {
     try {
       const response = await backendApi.get('/drivers');
-      return Array.isArray(response.data) ? response.data : response.data?.drivers || [];
+      return response.data?.success ? response.data.data : response.data;
     } catch (error) {
       throw new Error(getErrorMessage(error, 'Failed to load drivers'));
     }
   },
 
-  verifyDriver: async (driverId, storedImage, capturedImage) => {
+  verifyDriver: async (storedImage, capturedImage) => {
     try {
-      const response = await backendApi.post('/verify-driver', {
-        driver_id: String(driverId),
+      // Direct call to AI service for face verification
+      const response = await aiApi.post('/verify-face', {
         stored_image: storedImage,
         captured_image: capturedImage,
       });
       return response.data;
     } catch (error) {
-      throw new Error(getErrorMessage(error, 'Driver verification failed'));
+      throw new Error(getErrorMessage(error, 'Face verification failed'));
     }
   },
 
-  startSession: async (driverId, vehicleId) => {
+  getAvailableVehicles: async (ownerId) => {
     try {
-      const response = await backendApi.post('/start-session', {
-        driver_id: String(driverId),
-        vehicle_id: String(vehicleId),
+      const url = ownerId ? `/vehicles?status=available&ownerId=${ownerId}` : '/vehicles?status=available';
+      const response = await backendApi.get(url);
+      return response.data?.success ? response.data.data : response.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error, 'Failed to load vehicles'));
+    }
+  },
+
+  lockVehicle: async (vehicleId, driverId, ownerId) => {
+    try {
+      const response = await backendApi.post(`/vehicles/${vehicleId}/lock`, {
+        driverId,
+        ownerId
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(getErrorMessage(error, 'Failed to select vehicle'));
+    }
+  },
+
+  startSession: async (driverId, vehicleId, ownerId) => {
+    try {
+      const response = await backendApi.post('/sessions', {
+        driverId,
+        vehicleId,
+        ownerId,
+        status: 'active',
+        startTime: new Date().toISOString()
       });
       return response.data;
     } catch (error) {

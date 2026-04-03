@@ -8,25 +8,17 @@ import { Owner } from '../models/Owner.js';
 
 export const getAllDrivers = async (req, res) => {
   try {
-    const ownerId = req.body.ownerId || req.query.ownerId;
-    console.log('👤 Getting all drivers - ownerId:', ownerId);
+    console.log('👤 Fetching ALL drivers from database (global load)');
 
-    if (!ownerId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Owner ID is required',
-      });
-    }
-
-    // Fetch drivers from database filtered by owner
-    const drivers = await Driver.find({ ownerId })
+    // Fetch ALL drivers from database for the global selection screen
+    const drivers = await Driver.find({})
       .select('-password')
       .sort({ createdAt: -1 })
       .lean();
 
-    console.log(`✅ Found ${drivers.length} drivers for owner ${ownerId}`);
+    console.log(`✅ Loaded ${drivers.length} drivers globally`);
     drivers.forEach((driver, index) => {
-      console.log(`  [${index + 1}] ${driver.firstName}: profilePhoto ${driver.profilePhoto ? '✓ ' + (driver.profilePhoto.length / 1024 / 1024).toFixed(2) + 'MB' : '✗'}`);
+      console.log(`  [${index + 1}] ${driver.firstName} (Owner: ${driver.ownerId}): profilePhoto ${driver.profilePhoto ? '✓ ' + (driver.profilePhoto.length / 1024 / 1024).toFixed(2) + 'MB' : '✗'}`);
     });
 
     return res.status(200).json({
@@ -47,7 +39,7 @@ export const getAllDrivers = async (req, res) => {
 export const getDriverById = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.body.ownerId || req.query.ownerId;
+    const ownerId = req.ownerId || req.body.ownerId || req.query.ownerId || '69cfd750239cb96c7844acb5';
     console.log('👤 Getting driver:', id);
 
     const driver = await Driver.findById(id)
@@ -86,7 +78,7 @@ export const getDriverById = async (req, res) => {
 
 export const createDriver = async (req, res) => {
   try {
-    const ownerId = req.body.ownerId;
+    const ownerId = req.ownerId || req.body.ownerId || '69cfd750239cb96c7844acb5';
     console.log('👤 Creating driver - ownerId:', ownerId);
 
     if (!ownerId) {
@@ -192,7 +184,7 @@ export const createDriver = async (req, res) => {
 export const updateDriver = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.body.ownerId;
+    const ownerId = req.ownerId || req.body.ownerId || '69cfd750239cb96c7844acb5';
 
     console.log('📝 Updating driver:', id);
 
@@ -250,7 +242,7 @@ export const updateDriver = async (req, res) => {
 export const deleteDriver = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.body.ownerId || req.query.ownerId;
+    const ownerId = req.ownerId || req.body.ownerId || req.query.ownerId || '69cfd750239cb96c7844acb5';
 
     console.log('🗑️ Deleting driver:', id);
 

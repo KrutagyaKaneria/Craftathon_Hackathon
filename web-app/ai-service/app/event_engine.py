@@ -4,6 +4,7 @@ from asyncio import create_task
 from app.config import settings
 from app.utils import logger
 from app.db import insert_event
+from app.socket_client import socket_manager
 
 _alert_state = {}
 
@@ -156,5 +157,7 @@ async def process_event(driver_id: str, session_id: str, event_type: str, subtyp
             },
         }
         create_task(send_backend_alert(outbound_payload))
+        # Also send via Socket.io for real-time owner notifications
+        create_task(socket_manager.emit_alert(outbound_payload))
         
     return event_payload

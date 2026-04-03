@@ -6,6 +6,7 @@ from app.utils import decode_image_base64, logger
 from app.fatigue import detect_fatigue
 from app.rash import detect_rash
 from app.event_engine import process_event
+from app.face_verify import verify_face
 
 router = APIRouter()
 
@@ -30,6 +31,10 @@ class AnalyzeRequest(BaseModel):
     gyro: float
     driver_id: str
     session_id: str
+
+class FaceVerifyRequest(BaseModel):
+    stored_image: str
+    captured_image: str
 
 # --- Endpoints ---
 
@@ -134,3 +139,9 @@ async def handle_analyze(payload: AnalyzeRequest):
             "rash": rash_event
         }
     }
+
+@router.post("/verify-face")
+async def handle_verify_face(payload: FaceVerifyRequest):
+    logger.info("Face verification request received")
+    result = verify_face(payload.stored_image, payload.captured_image)
+    return result

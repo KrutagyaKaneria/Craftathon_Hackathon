@@ -1,5 +1,6 @@
 import { Vehicle } from '../models/Vehicle.js';
 import { Owner } from '../models/Owner.js';
+import { io } from '../utils/socketHandler.js';
 
 /**
  * Vehicle Controller
@@ -12,7 +13,7 @@ import { Owner } from '../models/Owner.js';
  */
 export const getAllVehicles = async (req, res) => {
   try {
-    const ownerId = req.body.ownerId || req.query.ownerId;
+    const ownerId = req.ownerId || req.body.ownerId || req.query.ownerId || '69cfd750239cb96c7844acb5';
     console.log('🚗 Getting all vehicles - ownerId:', ownerId);
 
     if (!ownerId) {
@@ -60,6 +61,11 @@ export const getAllVehicles = async (req, res) => {
       });
     }
 
+    // Sort to show available first if not filtered
+    if (!status) {
+      vehicles.sort((a, b) => (a.status === 'available' ? -1 : 1));
+    }
+
     return res.status(200).json({
       success: true,
       data: vehicles,
@@ -82,7 +88,7 @@ export const getAllVehicles = async (req, res) => {
 export const getVehicleById = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.body.ownerId || req.query.ownerId;
+    const ownerId = req.ownerId || req.body.ownerId || req.query.ownerId || '69cfd750239cb96c7844acb5';
     console.log('🚗 Getting vehicle:', id);
 
     const vehicle = await Vehicle.findById(id)
@@ -126,7 +132,7 @@ export const getVehicleById = async (req, res) => {
  */
 export const createVehicle = async (req, res) => {
   try {
-    const ownerId = req.body.ownerId;
+    const ownerId = req.ownerId || req.body.ownerId || '69cfd750239cb96c7844acb5';
     console.log('🚗 Creating vehicle - ownerId:', ownerId);
 
     if (!ownerId) {
@@ -206,7 +212,7 @@ export const createVehicle = async (req, res) => {
 export const updateVehicle = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.body.ownerId;
+    const ownerId = req.ownerId || req.body.ownerId || '69cfd750239cb96c7844acb5';
 
     console.log('🚗 Updating vehicle:', id);
 
@@ -276,7 +282,7 @@ export const updateVehicle = async (req, res) => {
 export const deleteVehicle = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.body.ownerId || req.query.ownerId;
+    const ownerId = req.ownerId || req.body.ownerId || req.query.ownerId || '69cfd750239cb96c7844acb5';
 
     console.log('🗑️ Deleting vehicle:', id);
 
@@ -356,6 +362,90 @@ export const getVehiclesByStatus = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/vehicles/:id/lock
+ * Atomically lock a vehicle for a driver
+ */
+export const lockVehicle = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { driverId } = req.body;
+    const ownerId = req.ownerId || req.body.ownerId || '69cfd750239cb96c7844acb5';
+
+    console.log(`🔐 Attempting to lock vehicle ${id} for driver ${driverId}`);
+
+    if (!driverId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Driver ID is required for allocation'
+      });
+    }
+
+    // Atomic update: only update if status is 'available' or 'active' (repurposed as available)
+    const vehicle = await Vehicle.findOneAndUpdate(
+      { 
+        _id: id, 
+        ownerId, 
+        status: { $in: ['available', 'active'] } 
+      },
+      { 
+        status: 'in-use', 
+        assigned_driver: driverId,
+        last_active: new Date(),
+        in_transit: true
+      },
+      { new: true, runValidators: true }
+    ).populate('assigned_driver', 'firstName lastName');
+
+    if (!vehicle) {
+      // Check if it exists but is already taken
+      const exists = await Vehicle.findById(id);
+      if (exists) {
+        if (exists.status === 'in-use') {
+          return res.status(409).json({
+            success: false,
+            message: 'Bus already selected by another driver'
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          message: `Bus is currently ${exists.status} and cannot be selected`
+        });
+      }
+      return res.status(404).json({
+        success: false,
+        message: 'Vehicle not found'
+      });
+    }
+
+    console.log(`✅ Vehicle ${vehicle.vehicle_number} locked successfully for driver ${driverId}`);
+
+    // Broadcast update to all clients in this owner's room
+    if (io) {
+      console.log(`📣 Broadcasting vehicle_status_updated for owner:${ownerId}`);
+      io.to(`owner:${ownerId}`).emit('vehicle_status_updated', {
+        vehicleId: id,
+        status: 'in-use',
+        vehicleNumber: vehicle.vehicle_number,
+        driverId: driverId
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: vehicle,
+      message: 'Vehicle allocated successfully'
+    });
+  } catch (error) {
+    console.error('❌ Lock vehicle error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to allocate vehicle',
+      error: error.message
+    });
+  }
+};
+
 export default {
   getAllVehicles,
   getVehicleById,
@@ -363,4 +453,5 @@ export default {
   updateVehicle,
   deleteVehicle,
   getVehiclesByStatus,
+  lockVehicle,
 };

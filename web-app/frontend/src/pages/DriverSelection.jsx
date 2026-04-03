@@ -12,6 +12,12 @@ const DriverSelection = () => {
 
   useEffect(() => {
     const fetchDrivers = async () => {
+      // Only fetch if we don't have drivers yet
+      if (drivers && drivers.length > 0) {
+        setLoading(false);
+        return;
+      }
+      
       try {
         setLoading(true);
         setError('');
@@ -25,7 +31,7 @@ const DriverSelection = () => {
       }
     };
     fetchDrivers();
-  }, [setDrivers]);
+  }, [setDrivers, drivers]);
 
   const handleDriverSelect = (driver) => {
     setSelectedDriver(driver);
@@ -46,17 +52,18 @@ const DriverSelection = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {drivers.map((driver) => (
             <div
-              key={driver.id}
+              key={driver._id || driver.id}
               onClick={() => handleDriverSelect(driver)}
-              className="bg-gray-800 rounded-lg p-6 cursor-pointer hover:bg-gray-700 transition-colors"
+              className="bg-gray-800 rounded-lg p-6 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700 hover:border-blue-500"
             >
               <img
-                src={driver.profile_image || '/default-avatar.png'}
-                alt={driver.name}
-                className="w-24 h-24 rounded-full mx-auto mb-4 object-cover"
+                src={driver.profilePhoto || '/default-avatar.png'}
+                alt={`${driver.firstName} ${driver.lastName}`}
+                className="w-24 h-24 rounded-full mx-auto mb-4 object-cover border-2 border-blue-600"
               />
-              <h2 className="text-xl font-semibold text-center">{driver.name}</h2>
-              <p className="text-gray-400 text-center">ID: {driver.id}</p>
+              <h2 className="text-xl font-semibold text-center">{driver.firstName} {driver.lastName}</h2>
+              <p className="text-blue-400 text-center font-medium mt-1">{driver.phone}</p>
+              <p className="text-gray-500 text-center text-xs mt-2 truncate">ID: {driver._id || driver.id}</p>
             </div>
           ))}
         </div>
