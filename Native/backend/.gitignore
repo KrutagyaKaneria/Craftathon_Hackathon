@@ -1,0 +1,160 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment variables - NEVER commit these!
+.env
+.env.local
+.env.production
+.env.*.local
+.env.test
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.log
+
+# Build and distribution
+dist/
+build/
+out/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.iml
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+mongodb/
+data/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# OS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+*.rar
+*.zip
+*.7z
+*.iso
+
+# Certificates and keys - SECURITY CRITICAL
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.p8
+*.keystore
+*.jks
+*.pfx
+
+# Sensitive data
+secrets/
+credentials/
+api-keys/
+tokens/
+private/
+
+# Deployment
+.env.production.local
+.aws/
+.gcloud/
+service-account-key.json
+firebase-config.json
+
+# IDE and editor files
+.vscode/
+.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
+.eclipse
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Package manager backups
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Backup files
+*.bak
+*.backup
+*.swp
+*.swo
+*~
+
+# Node modules cache
+.npm
+.eslintcache
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Misc
+*.DS_Store
+.AppleDouble
+.LSOverride
+
+# Production
+/build
+/dist
+
+# Debugging
+.debuginfo
+.vscode-test

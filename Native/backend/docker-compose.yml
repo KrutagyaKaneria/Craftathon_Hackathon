@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: driveguard-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=driveguard
+    networks:
+      - driveguard_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: node:18-alpine
+    container_name: driveguard-backend
+    working_dir: /app
+    volumes:
+      - ./:/app
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGODB_URI=mongodb://mongodb:27017/driveguard
+      - JWT_SECRET=your_jwt_secret_key_change_in_production
+      - JWT_REFRESH_SECRET=your_refresh_secret_key_change_in_production
+      - JWT_EXPIRE=7d
+      - NODE_ENV=development
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - driveguard_network
+    command: >
+      sh -c "npm install && npm run dev"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  driveguard_network:
+    driver: bridge
