@@ -66,7 +66,7 @@ async def handle_fatigue(payload: FatigueRequest):
 
 @router.post("/rash")
 async def handle_rash(payload: RashRequest):
-    result = detect_rash(payload.acceleration, payload.brake, payload.gyro)
+    result = detect_rash(payload.acceleration, payload.brake, payload.gyro, payload.session_id)
     
     event_payload = None
     if result.get("rash"):
@@ -92,7 +92,7 @@ async def handle_analyze(payload: AnalyzeRequest):
     
     # Calculate both
     fatigue_res = detect_fatigue(img, payload.session_id)
-    rash_res = detect_rash(payload.acceleration, payload.brake, payload.gyro)
+    rash_res = detect_rash(payload.acceleration, payload.brake, payload.gyro, payload.session_id)
     
     # Process Fatigue Event
     fatigue_event = None

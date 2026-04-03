@@ -21,9 +21,25 @@ class Settings(BaseSettings):
     FATIGUE_SMOOTHING_FRAMES: int = 3   # Consecutive frames below threshold to trigger drowsy state
 
     # Rash driving heuristics
-    RASH_ACCEL_THRESHOLD: float = 3.0
-    RASH_BRAKE_THRESHOLD: float = -4.0
-    RASH_GYRO_THRESHOLD: float = 2.0
+    # Tuned defaults for heavier vehicle profile (bus):
+    # - less sensitive to pedal jitter
+    # - requires sustained aggressive behavior before flagging
+    RASH_ACCEL_THRESHOLD: float = 3.4
+    RASH_BRAKE_THRESHOLD: float = -4.4
+    RASH_GYRO_THRESHOLD: float = 2.2
+    RASH_NOISE_DEADZONE: float = 0.25
+    RASH_MIN_CONSECUTIVE_HITS: int = 3
+    RASH_BRAKE_MIN_CONSECUTIVE_HITS: int = 1
+    RASH_ACCEL_HIGH_MULTIPLIER: float = 1.6
+    RASH_BRAKE_HIGH_MULTIPLIER: float = 1.6
+    RASH_GYRO_HIGH_MULTIPLIER: float = 1.6
+
+    # Owner Alert Anti-Spam / Aggregation
+    FATIGUE_ALERT_MIN_CONSECUTIVE: int = 2
+    RASH_ALERT_MIN_CONSECUTIVE: int = 3
+    FATIGUE_ALERT_COOLDOWN_SECONDS: int = 120
+    RASH_ALERT_COOLDOWN_SECONDS: int = 45
+    ALERT_STALE_RESET_SECONDS: int = 30
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

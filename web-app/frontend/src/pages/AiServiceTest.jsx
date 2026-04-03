@@ -46,15 +46,26 @@ const AiServiceTest = () => {
   const [isBrakeActive, setIsBrakeActive] = useState(false);
   const [virtualSpeed, setVirtualSpeed] = useState(0);
 
+  const idleRpm = 750;
+  const maxRpm = 3800;
+  const accelNorm = Math.max(0, Math.min(1, acceleration / 5));
+  const calibratedRpm = Math.round(idleRpm + ((accelNorm ** 1.35) * (maxRpm - idleRpm)));
+
   useEffect(() => {
     const physicsTimer = setInterval(() => {
       const state = useAppStore.getState();
       let newAcc = state.acceleration;
       let newBrake = state.brake;
 
-      // Gas increases acceleration (RPM) quickly
-      if (gasPressed.current) {
-        if (newAcc < 5) newAcc = Math.min(5, newAcc + 0.15);
+      // Gas pedal tuned "hard":
+      // Higher acceleration requires disproportionately more press time.
+      if (gasPressed.current && !brakePressed.current) {
+        if (newAcc < 5) {
+          const normalized = newAcc / 5;
+          const resistance = 1 - (normalized ** 1.8);
+          const step = 0.035 + (0.08 * Math.max(0.08, resistance));
+          newAcc = Math.min(5, newAcc + step);
+        }
       } else {
         // Natural decay or forced braking decay
         const decay = brakePressed.current ? 0.3 : 0.15;
@@ -76,6 +87,8 @@ const AiServiceTest = () => {
 
       // Brake pedal pushes brake state to negative 5 (for AI detection)
       if (brakePressed.current) {
+        // Hard braking should instantly cut throttle.
+        if (newAcc > 0) newAcc = Math.max(0, newAcc - 0.45);
         if (newBrake > -5) newBrake = Math.max(-5, newBrake - 0.2);
       } else {
         if (newBrake < 0) newBrake = Math.min(0, newBrake + 0.15);
@@ -90,8 +103,18 @@ const AiServiceTest = () => {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'ArrowRight') { gasPressed.current = true; setIsGasActive(true); }
-      if (e.key === 'ArrowLeft') { brakePressed.current = true; setIsBrakeActive(true); }
+      if (e.key === 'ArrowRight') {
+        gasPressed.current = true;
+        brakePressed.current = false;
+        setIsGasActive(true);
+        setIsBrakeActive(false);
+      }
+      if (e.key === 'ArrowLeft') {
+        brakePressed.current = true;
+        gasPressed.current = false;
+        setIsBrakeActive(true);
+        setIsGasActive(false);
+      }
     };
     const handleKeyUp = (e) => {
       if (e.key === 'ArrowRight') { gasPressed.current = false; setIsGasActive(false); }
@@ -206,10 +229,10 @@ const AiServiceTest = () => {
             {/* LEFT: BRAKE PEDAL */}
             <div
               className="relative flex flex-col items-center mt-8 w-[104px] h-[140px] cursor-pointer select-none touch-none z-30 ml-2"
-              onMouseDown={(e) => { e.preventDefault(); brakePressed.current = true; setIsBrakeActive(true); }}
+              onMouseDown={(e) => { e.preventDefault(); brakePressed.current = true; gasPressed.current = false; setIsBrakeActive(true); setIsGasActive(false); }}
               onMouseUp={(e) => { e.preventDefault(); brakePressed.current = false; setIsBrakeActive(false); }}
               onMouseLeave={(e) => { e.preventDefault(); brakePressed.current = false; setIsBrakeActive(false); }}
-              onTouchStart={() => { brakePressed.current = true; setIsBrakeActive(true); }}
+              onTouchStart={() => { brakePressed.current = true; gasPressed.current = false; setIsBrakeActive(true); setIsGasActive(false); }}
               onTouchEnd={() => { brakePressed.current = false; setIsBrakeActive(false); }}
             >
               <div className={`relative w-full h-[110px] rounded-[10px] bg-gradient-to-b from-[#f2f2f2] to-[#b3b3b3] border-[2.5px] border-[#808080] shadow-[0_6px_12px_rgba(0,0,0,0.6)] transition-all flex flex-col items-center py-2 z-10 box-border ${isBrakeActive ? 'border-b-[3px] border-b-[#8c8c8c] translate-y-[5px]' : 'border-b-[8px] border-b-[#8c8c8c] translate-y-0'}`}>
@@ -236,7 +259,7 @@ const AiServiceTest = () => {
                 </svg>
                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center">
                   <div className="text-[#f2f2f2] font-black text-[24px] tracking-tight leading-none mb-1 shadow-sm" style={{ textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}>
-                    {Math.round(acceleration * 1600)}
+                    {calibratedRpm}
                   </div>
                   <div className="text-zinc-400 font-extrabold text-[12px] tracking-widest drop-shadow-md">RPM</div>
                 </div>
@@ -282,10 +305,10 @@ const AiServiceTest = () => {
             {/* RIGHT: GAS PEDAL */}
             <div
               className="relative flex flex-col items-center mt-8 w-[104px] h-[140px] cursor-pointer select-none touch-none z-30 mr-2"
-              onMouseDown={(e) => { e.preventDefault(); gasPressed.current = true; setIsGasActive(true); }}
+              onMouseDown={(e) => { e.preventDefault(); gasPressed.current = true; brakePressed.current = false; setIsGasActive(true); setIsBrakeActive(false); }}
               onMouseUp={(e) => { e.preventDefault(); gasPressed.current = false; setIsGasActive(false); }}
               onMouseLeave={(e) => { e.preventDefault(); gasPressed.current = false; setIsGasActive(false); }}
-              onTouchStart={() => { gasPressed.current = true; setIsGasActive(true); }}
+              onTouchStart={() => { gasPressed.current = true; brakePressed.current = false; setIsGasActive(true); setIsBrakeActive(false); }}
               onTouchEnd={() => { gasPressed.current = false; setIsGasActive(false); }}
             >
               <div className={`relative w-full h-[110px] rounded-[10px] bg-gradient-to-b from-[#f2f2f2] to-[#b3b3b3] border-[2.5px] border-[#808080] shadow-[0_6px_12px_rgba(0,0,0,0.6)] transition-all flex flex-col items-center py-2 z-10 box-border ${isGasActive ? 'border-b-[3px] border-b-[#8c8c8c] translate-y-[5px]' : 'border-b-[8px] border-b-[#8c8c8c] translate-y-0'}`}>
