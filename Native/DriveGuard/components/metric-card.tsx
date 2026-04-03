@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { ThemedText } from './themed-text';
+import { Theme } from '@/constants/styles';
 
 interface MetricCardProps {
   icon?: React.ReactNode;
@@ -23,33 +24,39 @@ export const MetricCard: React.FC<MetricCardProps> = ({
 }) => {
   const percentageColor =
     status === 'optimal'
-      ? '#00D9FF'
+      ? Theme.colors.accent
       : status === 'warning'
         ? '#FFD700'
-        : '#FF4444';
+        : Theme.colors.error;
 
   return (
     <View style={[styles.card, style]}>
-      {icon && <View style={styles.iconContainer}>{icon}</View>}
-      
-      <ThemedText style={styles.title}>{title}</ThemedText>
-      
-      <View style={styles.valueContainer}>
-        <ThemedText style={styles.value}>{value}</ThemedText>
-        {unit && <ThemedText style={styles.unit}>{unit}</ThemedText>}
+      <View style={styles.contentRow}>
+        <View style={styles.innerContent}>
+          <ThemedText style={styles.title}>{title.toUpperCase()}</ThemedText>
+          
+          <View style={styles.valueContainer}>
+            <ThemedText style={styles.value}>{value}</ThemedText>
+            {unit && <ThemedText style={styles.unit}>{unit}</ThemedText>}
+          </View>
+        </View>
+        
+        {icon && <View style={styles.iconContainer}>{icon}</View>}
       </View>
 
       {percentage !== undefined && (
-        <View style={styles.percentageBar}>
-          <View
-            style={[
-              styles.percentageFill,
-              {
-                width: `${Math.min(percentage, 100)}%`,
-                backgroundColor: percentageColor,
-              },
-            ]}
-          />
+        <View style={styles.percentageBarContainer}>
+          <View style={styles.percentageBar}>
+            <View
+              style={[
+                styles.percentageFill,
+                {
+                  width: `${Math.min(percentage, 100)}%`,
+                  backgroundColor: percentageColor,
+                },
+              ]}
+            />
+          </View>
         </View>
       )}
     </View>
@@ -58,46 +65,64 @@ export const MetricCard: React.FC<MetricCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    borderRadius: Theme.roundness.lg,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    // Triple Diffusion Shadow Effect (Simulated via layering in React Native)
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  contentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  innerContent: {
+    flex: 1,
   },
   iconContainer: {
-    marginBottom: 8,
+    padding: 8,
+    borderRadius: Theme.roundness.md,
+    backgroundColor: Theme.colors.surfaceContainerHigh,
   },
   title: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    opacity: 0.7,
-    marginBottom: 8,
+    fontSize: 10,
+    fontFamily: Theme.fonts.label,
+    color: Theme.colors.textSecondary,
+    letterSpacing: 1.5,
+    marginBottom: 4,
   },
   valueContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 8,
   },
   value: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 28,
+    fontFamily: Theme.fonts.display,
+    color: Theme.colors.text,
   },
   unit: {
     fontSize: 12,
-    color: '#FFFFFF',
-    opacity: 0.6,
-    marginLeft: 4,
+    fontFamily: Theme.fonts.technical,
+    color: Theme.colors.textMuted,
+    marginLeft: 6,
+  },
+  percentageBarContainer: {
+    marginTop: 4,
   },
   percentageBar: {
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 2,
+    height: 3,
+    backgroundColor: Theme.colors.outline,
+    borderRadius: Theme.roundness.full,
     overflow: 'hidden',
   },
   percentageFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: Theme.roundness.full,
   },
 });

@@ -5,7 +5,7 @@ import { safeStorage } from '../utils/safeStorage';
 // For LOCAL DEVELOPMENT: http://YOUR_LOCAL_IP:5000
 // For PRODUCTION: https://your-backend-domain.com
 // Get your local IP: ipconfig (Windows) or ifconfig (Mac/Linux)
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.61.65.199:5000';
 
 // Create axios instance
 const apiClient = axios.create({
