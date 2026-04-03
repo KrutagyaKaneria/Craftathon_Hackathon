@@ -5,6 +5,7 @@ import authRoutes from './routes/authRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import vehicleRoutes from './routes/vehicleRoutes.js';
 import driverRoutes from './routes/driverRoutes.js';
+import ownerRoutes from './routes/ownerRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import { connectDB } from './config/database.js';
 
@@ -53,6 +54,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/drivers', driverRoutes);
+app.use('/api/owners', ownerRoutes);
 app.use('/api/sessions', sessionRoutes);
 
 // Health check endpoint

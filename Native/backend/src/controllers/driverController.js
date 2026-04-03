@@ -36,6 +36,51 @@ export const getAllDrivers = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/drivers/owner/me
+ * Fetch ONLY drivers for logged-in owner (Native App)
+ * Requires authentication - filters by ownerId from JWT token
+ */
+export const getOwnerDrivers = async (req, res) => {
+  try {
+    const ownerId = req.ownerId;
+    console.log('👤 Fetching drivers for owner:', ownerId);
+
+    if (!ownerId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Owner ID is required - not authenticated',
+      });
+    }
+
+    // Fetch ONLY drivers belonging to this owner
+    const drivers = await Driver.find({ ownerId })
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .populate('ownerId', 'email firstName lastName phone')
+      .lean();
+
+    console.log(`✅ Loaded ${drivers.length} drivers for owner ${ownerId}`);
+    drivers.forEach((driver, index) => {
+      console.log(`  [${index + 1}] ${driver.firstName} ${driver.lastName || ''} (${driver.email})`);
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: drivers,
+      count: drivers.length,
+      ownerId: ownerId
+    });
+  } catch (error) {
+    console.error('❌ Get owner drivers error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch owner drivers',
+      error: error.message,
+    });
+  }
+};
+
 export const getDriverById = async (req, res) => {
   try {
     const { id } = req.params;
