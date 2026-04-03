@@ -3,15 +3,21 @@ import numpy as np
 import mediapipe as mp
 from app.config import settings
 
-# Initialize MediaPipe Face Mesh
-mp_face_mesh = mp.solutions.face_mesh
-# Reusable face mesh detector to avoid re-allocation per request
-face_mesh = mp_face_mesh.FaceMesh(
-    static_image_mode=True, # Used in stateless API
-    max_num_faces=1,
-    refine_landmarks=True,
-    min_detection_confidence=0.5
+import os
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
+
+# Initialize MediaPipe Face Landmarker
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'models', 'face_landmarker.task')
+base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
+options = vision.FaceLandmarkerOptions(
+    base_options=base_options,
+    running_mode=vision.RunningMode.IMAGE,
+    num_faces=1,
+    min_face_detection_confidence=0.5,
+    min_face_presence_confidence=0.5
 )
+face_landmarker = vision.FaceLandmarker.create_from_options(options)
 
 # In-Memory Cache for consecutive frame smoothing (naive solution for stateless API)
 # Key: session_id, Value: number of consecutive drowsy frames
@@ -71,9 +77,10 @@ def detect_fatigue(image: np.ndarray, session_id: str) -> dict:
     Calculates EAR and MAR to deduce 'yawning', 'eye_closure', or 'head_tilt'.
     """
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    results = face_mesh.process(image_rgb)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
+    results = face_landmarker.detect(mp_image)
     
-    if not results.multi_face_landmarks:
+    if not results.face_landmarks:
         return {
             "fatigue_score": 0.0,
             "status": "no_face",
@@ -81,7 +88,7 @@ def detect_fatigue(image: np.ndarray, session_id: str) -> dict:
             "metrics": {"ear": 0.0, "mar": 0.0}
         }
         
-    landmarks = results.multi_face_landmarks[0].landmark
+    landmarks = results.face_landmarks[0]
     
     # Calculate EAR
     right_ear = calculate_ear(landmarks, RIGHT_EYE)
