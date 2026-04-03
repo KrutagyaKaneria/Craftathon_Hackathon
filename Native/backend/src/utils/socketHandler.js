@@ -41,20 +41,12 @@ export const initSocket = (server) => {
         socket.join(`owner:${ownerId}`);
         socket.ownerId = ownerId;
         
-        console.log(`👤 Owner authenticated via Token: ${ownerId} (Socket: ${socket.id})`);
+        console.log(`👤 Owner authenticated: ${ownerId} (Socket: ${socket.id}) joined room owner:${ownerId}`);
         socket.emit('authenticated', { success: true });
       } catch (error) {
         console.error('❌ Socket auth failed:', error.message);
         socket.emit('error', { message: 'Authentication failed' });
       }
-    });
-
-    // Unauthenticated join for web-app demo
-    socket.on('join_owner_room', (ownerId) => {
-      if (!ownerId) return;
-      socket.join(`owner:${ownerId}`);
-      console.log(`👤 Web-App joined room: owner:${ownerId} (Socket: ${socket.id})`);
-      socket.emit('joined_room', { ownerId });
     });
 
     // Alert reporting from AI Service (internal connection - no auth required as per user)

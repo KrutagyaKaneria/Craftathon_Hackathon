@@ -3,11 +3,7 @@ import { Platform } from 'react-native';
 
 // Default backend URL for development
 // On Android emulator, 10.0.2.2 refers to the host machine's localhost
-const SOCKET_URL = Platform.select({
-  android: 'http://10.0.2.2:5000',
-  ios: 'http://localhost:5000',
-  default: 'http://localhost:5000',
-});
+const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
 
 class SocketService {
   private socket: Socket | null = null;
