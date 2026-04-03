@@ -1,0 +1,24 @@
+# Environments
+.env
+.venv/
+venv/
+env/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Logs
+logs/
+*.log
+
+# Pytest / Coverage
+.pytest_cache/
+htmlcov/
+.coverage
+
+# IDEs
+.vscode/
+.idea/
