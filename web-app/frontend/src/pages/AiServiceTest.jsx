@@ -12,6 +12,9 @@ const AiServiceTest = () => {
   const [requestError, setRequestError] = useState('');
   const [fatigueDebug, setFatigueDebug] = useState(null);
 
+  // Simulated metrics
+  const [stats, setStats] = useState({ distance: 0, hours: 0, minutes: 0, seconds: 0 });
+
   const {
     fatigueStatus,
     acceleration,
@@ -45,11 +48,41 @@ const AiServiceTest = () => {
   const [isGasActive, setIsGasActive] = useState(false);
   const [isBrakeActive, setIsBrakeActive] = useState(false);
   const [virtualSpeed, setVirtualSpeed] = useState(0);
+  const virtualSpeedRef = useRef(0);
 
   const idleRpm = 750;
   const maxRpm = 3800;
   const accelNorm = Math.max(0, Math.min(1, acceleration / 5));
   const calibratedRpm = Math.round(idleRpm + ((accelNorm ** 1.35) * (maxRpm - idleRpm)));
+
+  // Simulated Stats Timer - Stable 1s interval
+  useEffect(() => {
+    let interval;
+    if (isRunning) {
+      interval = setInterval(() => {
+        setStats((prev) => {
+          const nextSeconds = prev.seconds + 1;
+          const nextMinutes = prev.minutes + Math.floor(nextSeconds / 60);
+          const nextHours = prev.hours + Math.floor(nextMinutes / 60);
+          
+          // Distance calculation: speed * time
+          // speed = virtualSpeedRef.current * 36 (km/h)
+          // time = 1s = 1/3600 h
+          // distance_inc = (virtualSpeedRef.current * 36) / 3600 = virtualSpeedRef.current / 100
+          const distanceInc = virtualSpeedRef.current / 100;
+          const nextDistance = prev.distance + distanceInc;
+
+          return {
+            distance: nextDistance,
+            hours: nextHours,
+            minutes: nextMinutes % 60,
+            seconds: nextSeconds % 60,
+          };
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isRunning]); // ONLY depend on isRunning
 
   useEffect(() => {
     const physicsTimer = setInterval(() => {
@@ -57,8 +90,6 @@ const AiServiceTest = () => {
       let newAcc = state.acceleration;
       let newBrake = state.brake;
 
-      // Gas pedal tuned "hard":
-      // Higher acceleration requires disproportionately more press time.
       if (gasPressed.current && !brakePressed.current) {
         if (newAcc < 5) {
           const normalized = newAcc / 5;
@@ -67,12 +98,10 @@ const AiServiceTest = () => {
           newAcc = Math.min(5, newAcc + step);
         }
       } else {
-        // Natural decay or forced braking decay
         const decay = brakePressed.current ? 0.3 : 0.15;
         if (newAcc > 0) newAcc = Math.max(0, newAcc - decay);
       }
 
-      // Update independent Speedometer (rises very slowly, drops sharply on brake)
       setVirtualSpeed((prev) => {
         let nextSpeed = prev;
         if (brakePressed.current) {
@@ -82,12 +111,11 @@ const AiServiceTest = () => {
         } else {
           nextSpeed = Math.max(0, prev - 0.015);
         }
+        virtualSpeedRef.current = nextSpeed; // Update ref for stable interval access
         return nextSpeed;
       });
 
-      // Brake pedal pushes brake state to negative 5 (for AI detection)
       if (brakePressed.current) {
-        // Hard braking should instantly cut throttle.
         if (newAcc > 0) newAcc = Math.max(0, newAcc - 0.45);
         if (newBrake > -5) newBrake = Math.max(-5, newBrake - 0.2);
       } else {
@@ -179,205 +207,321 @@ const AiServiceTest = () => {
     setIsRunning(false);
   };
 
+  // Helper for status colors
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'alert': return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
+      case 'fatigue': return 'text-orange-400 bg-orange-400/10 border-orange-400/20';
+      case 'danger': return 'text-red-400 bg-red-400/10 border-red-400/20';
+      default: return 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20';
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-900 p-6 text-white">
-      <div className="mx-auto mb-6 flex max-w-7xl items-center justify-between">
-        <h1 className="text-2xl font-bold">Driver Test Interface</h1>
-        <Link className="rounded bg-gray-700 px-3 py-2 text-sm hover:bg-gray-600" to="/">
-          Back to Full Flow
-        </Link>
-      </div>
+    <div className="min-h-screen bg-[#0a0a0c] text-zinc-100 font-sans p-4">
+      {/* HEADER SECTION */}
+      <header className="max-w-[1600px] mx-auto flex items-center justify-between mb-6 px-6 py-4 bg-zinc-900/50 backdrop-blur-md rounded-2xl border border-zinc-800/50 shadow-2xl">
+        <div className="flex items-center gap-4">
+          <div className="w-2 h-8 bg-red-500 rounded-full"></div>
+          <h1 className="text-3xl font-black tracking-tight text-white uppercase italic">
+            Driver <span className="text-red-500">Details</span>
+          </h1>
+        </div>
 
-      <div className="mx-auto mb-6 flex max-w-7xl flex-wrap items-center gap-3">
-        <span className="rounded bg-gray-700 px-3 py-1 text-sm">{isStreaming ? 'Camera On' : 'Camera Off'}</span>
-        <span className="rounded bg-gray-700 px-3 py-1 text-sm">Fatigue: {fatigueStatus}</span>
-        {!isRunning ? (
-          <button className="rounded bg-emerald-600 px-4 py-2 text-sm hover:bg-emerald-500" onClick={startTest}>
-            Start AI Test
-          </button>
-        ) : (
-          <button className="rounded bg-red-600 px-4 py-2 text-sm hover:bg-red-500" onClick={stopTest}>
-            Stop AI Test
-          </button>
-        )}
-        <button
-          className="rounded bg-gray-700 px-4 py-2 text-sm hover:bg-gray-600"
-          onClick={() => {
-            stopTest();
-            reset();
-            setSessionId(`demo-session-${Date.now()}`);
-          }}
-        >
-          Reset
-        </button>
-      </div>
+        <div className="flex items-center gap-12">
+          <div className="text-center group">
+            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mb-1 group-hover:text-zinc-300 transition-colors">Travelled Distance</p>
+            <p className="text-2xl font-mono font-bold text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
+              {stats.distance.toFixed(2)} <span className="text-sm opacity-50">KM</span>
+            </p>
+          </div>
+          <div className="text-center group">
+            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mb-1 group-hover:text-zinc-300 transition-colors">Driving Hour</p>
+            <p className="text-2xl font-mono font-bold text-white">
+              {String(stats.hours).padStart(2, '0')}:{String(stats.minutes).padStart(2, '0')}:{String(stats.seconds).padStart(2, '0')}
+            </p>
+          </div>
+        </div>
 
-      <div className="mx-auto max-w-5xl">
-        <div className="overflow-hidden rounded-xl border border-zinc-400 bg-zinc-200 text-zinc-900 shadow-2xl">
-          <div className="p-8">
-            <div className="mx-auto w-full max-w-xl rounded-md border-2 border-zinc-600 bg-zinc-100 p-4">
-              <h2 className="mb-3 text-center text-5xl font-medium text-zinc-800">Face Camera</h2>
-              <div className="mx-auto aspect-[4/3] max-w-[520px] overflow-hidden rounded-sm border border-zinc-500 bg-zinc-300">
-                <video ref={videoRef} autoPlay playsInline className="h-full w-full object-cover" />
+        <div className="flex items-center gap-3">
+          {!isRunning ? (
+            <button 
+              onClick={startTest}
+              className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all active:scale-95 shadow-lg shadow-emerald-900/20 flex items-center gap-2"
+            >
+              <div className="w-2 h-2 rounded-full bg-white animate-pulse"></div>
+              START
+            </button>
+          ) : (
+            <button 
+              onClick={stopTest}
+              className="px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition-all active:scale-95 shadow-lg shadow-red-900/20 flex items-center gap-2"
+            >
+              <div className="w-2 h-2 rounded-full bg-white"></div>
+              STOP
+            </button>
+          )}
+          <button 
+            onClick={() => { stopTest(); reset(); setStats({ distance: 0, hours: 0, minutes: 0, seconds: 0 }); setSessionId(`demo-session-${Date.now()}`); }}
+            className="px-6 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-sm transition-all active:scale-95 border border-zinc-700"
+          >
+            RESET
+          </button>
+        </div>
+      </header>
+
+      {/* MAIN DASHBOARD GRID */}
+      <main className="max-w-[1600px] mx-auto grid grid-cols-[300px_1fr_300px] gap-6">
+        
+        {/* LEFT COLUMN: KEY DETAIL CARDS */}
+        <div className="space-y-4">
+          <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 shadow-xl group hover:border-zinc-700 transition-all">
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Driver ID</p>
+            <p className="text-lg font-bold text-white truncate group-hover:text-zinc-200 transition-colors uppercase italic">{driverId || "Anonymous"}</p>
+          </div>
+          <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 shadow-xl group hover:border-zinc-700 transition-all">
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Session ID</p>
+            <p className="text-xs font-mono text-zinc-400 break-all opacity-80 group-hover:opacity-100 transition-opacity">
+              {sessionId}
+            </p>
+          </div>
+          <div className={`p-5 rounded-2xl border shadow-xl transition-all ${getStatusColor(fatigueStatus)}`}>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-2 opacity-80">Fatigue Status</p>
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full animate-pulse bg-current`}></div>
+              <p className="text-xl font-black uppercase italic tracking-wider">{fatigueStatus}</p>
+            </div>
+          </div>
+          <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 shadow-xl group hover:border-zinc-700 transition-all">
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Steering Angle</p>
+            <div className="flex items-end gap-2">
+              <p className="text-2xl font-mono font-bold text-white">{steering.toFixed(1)}°</p>
+              <div className="h-1 flex-1 bg-zinc-800 rounded-full overflow-hidden mb-2">
+                <div 
+                  className="h-full bg-sky-500 transition-all duration-300"
+                  style={{ width: `${Math.min(100, (Math.abs(steering) / 45) * 100)}%` }}
+                ></div>
               </div>
             </div>
           </div>
+        </div>
 
-          <div
-            className="flex items-end justify-between px-8 pb-10 pt-10 rounded-b-xl relative overflow-hidden bg-gradient-to-t from-zinc-900 to-zinc-800 shadow-[inset_0_10px_20px_rgba(0,0,0,0.4)] border-t border-zinc-700"
-          >
-            {/* LEFT: BRAKE PEDAL */}
+        {/* CENTER COLUMN */}
+        <div className="flex flex-col gap-6">
+          {/* FACE SCREEN */}
+          <div className="relative aspect-video rounded-3xl overflow-hidden border-2 border-zinc-800 bg-black shadow-2xl group transition-all duration-500 hover:border-zinc-700">
+            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover opacity-90" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+            <div className="absolute top-4 left-6 flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-red-500 animate-pulse' : 'bg-zinc-600'}`}></div>
+              <span className="text-[10px] font-black text-white/80 tracking-widest uppercase">Live Feed</span>
+            </div>
+            {requestError && (
+              <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
+                <p className="bg-red-600/90 backdrop-blur-md text-white font-bold py-3 px-6 rounded-2xl border border-red-500 shadow-2xl animate-shake">
+                  {requestError}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* CONTROLS ROW: PRESERVED PEDALS & METERS */}
+          <div className="flex items-center justify-between px-10 py-8 bg-zinc-900/80 rounded-[40px] border border-zinc-800/80 shadow-2xl relative overflow-hidden">
+            {/* Background decorative elements */}
+            <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none"></div>
+
+            {/* Brake Pedal */}
             <div
-              className="relative flex flex-col items-center mt-8 w-[104px] h-[140px] cursor-pointer select-none touch-none z-30 ml-2"
+              className={`relative flex flex-col items-center w-[100px] cursor-pointer select-none transition-transform active:scale-95`}
               onMouseDown={(e) => { e.preventDefault(); brakePressed.current = true; gasPressed.current = false; setIsBrakeActive(true); setIsGasActive(false); }}
               onMouseUp={(e) => { e.preventDefault(); brakePressed.current = false; setIsBrakeActive(false); }}
               onMouseLeave={(e) => { e.preventDefault(); brakePressed.current = false; setIsBrakeActive(false); }}
               onTouchStart={() => { brakePressed.current = true; gasPressed.current = false; setIsBrakeActive(true); setIsGasActive(false); }}
               onTouchEnd={() => { brakePressed.current = false; setIsBrakeActive(false); }}
             >
-              <div className={`relative w-full h-[110px] rounded-[10px] bg-gradient-to-b from-[#f2f2f2] to-[#b3b3b3] border-[2.5px] border-[#808080] shadow-[0_6px_12px_rgba(0,0,0,0.6)] transition-all flex flex-col items-center py-2 z-10 box-border ${isBrakeActive ? 'border-b-[3px] border-b-[#8c8c8c] translate-y-[5px]' : 'border-b-[8px] border-b-[#8c8c8c] translate-y-0'}`}>
-                <div className="grid grid-cols-3 gap-x-2 gap-y-2.5 px-3 w-full place-items-center mb-1.5 mt-1">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={`brk-${i}`} className="w-[18px] h-[18px] rounded-full bg-zinc-900 shadow-[inset_0_3px_5px_rgba(0,0,0,0.9)] border border-zinc-400/20" />
+              <div className={`relative w-full h-[110px] rounded-[15px] bg-gradient-to-b from-[#f2f2f2] to-[#b3b3b3] border-[2.5px] border-[#808080] shadow-[0_6px_12px_rgba(0,0,0,0.6)] transition-all flex flex-col items-center py-2 z-10 box-border ${isBrakeActive ? 'border-b-[3px] border-b-[#8c8c8c] translate-y-[5px]' : 'border-b-[8px] border-b-[#8c8c8c] translate-y-0'}`}>
+                <div className="grid grid-cols-2 gap-2 mt-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="w-3 h-3 rounded-full bg-zinc-900 shadow-inner"></div>
                   ))}
                 </div>
-                <span className="text-[#2b2b2b] font-black uppercase text-[15px] tracking-[0.1em] mt-auto mb-1.5" style={{ textShadow: "0 1px 1px rgba(255,255,255,0.9)" }}>Brake</span>
+                <span className="text-[#2b2b2b] font-black uppercase text-[12px] tracking-widest mt-auto mb-2">Brake</span>
               </div>
-              {/* Stem cylinder */}
-              <div className="absolute bottom-0 w-7 h-14 bg-gradient-to-r from-zinc-700 via-zinc-400 to-zinc-700 border-x-2 border-zinc-900 z-0 translate-y-6 shadow-xl"></div>
+              <div className="w-6 h-10 bg-zinc-700 -mt-1 rounded-b-md"></div>
             </div>
 
-            {/* MIDDLE SCENE */}
-            <div className="flex-1 flex justify-center items-end gap-x-8 gap-y-6 relative h-full pb-6 z-30 flex-wrap sm:flex-nowrap">
-
-              {/* RPM Meter */}
-              <div className="relative flex flex-col items-center justify-center w-[160px] h-[160px] bg-zinc-950 rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.7),inset_0_4px_12px_rgba(255,255,255,0.05)] border-[6px] border-zinc-600">
-                <svg className="absolute inset-0 w-full h-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]" viewBox="0 0 100 100">
-                  <path d="M 18 82 A 44 44 0 1 1 82 82" fill="none" stroke="white" strokeWidth="4" />
-                  <path d="M 86.5 45 A 44 44 0 0 1 82 82" fill="none" stroke="#e02828" strokeWidth="7" />
-                  <path d="M 18 82 L 23 77 M 8 50 L 16 50 M 50 6 L 50 14 M 92 50 L 84 50 M 82 82 L 77 77" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                </svg>
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center">
-                  <div className="text-[#f2f2f2] font-black text-[24px] tracking-tight leading-none mb-1 shadow-sm" style={{ textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}>
-                    {calibratedRpm}
-                  </div>
-                  <div className="text-zinc-400 font-extrabold text-[12px] tracking-widest drop-shadow-md">RPM</div>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center" style={{ transform: `rotate(${-130 + (Math.abs(acceleration) / 5) * 260}deg)` }}>
-                  {/* Realistic Red Needle */}
-                  <div className="w-[4px] h-[56px] bg-red-600 absolute bottom-1/2 origin-bottom rounded-t-full shadow-[0_2px_6px_rgba(0,0,0,0.8)] border-[0.5px] border-red-800 flex justify-center">
-                    <div className="w-[1.5px] h-full bg-red-400 absolute"></div>
-                  </div>
-                </div>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[24px] h-[24px] bg-zinc-300 rounded-full shadow-[0_4px_8px_rgba(0,0,0,0.7)] border-[3px] border-zinc-700 flex items-center justify-center">
-                  <div className="w-2.5 h-2.5 bg-zinc-900 rounded-full"></div>
-                </div>
+            {/* RPM Meter */}
+            <div className="relative w-44 h-44 bg-zinc-950 rounded-full border-[6px] border-zinc-800 shadow-inner flex items-center justify-center">
+              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
+                <path d="M 20 80 A 40 40 0 1 1 80 80" fill="none" stroke="#27272a" strokeWidth="6" />
+                <path d="M 20 80 A 40 40 0 1 1 80 80" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="0 2" />
+                <path d="M 75 30 A 40 40 0 0 1 80 80" fill="none" stroke="#ef4444" strokeWidth="6" />
+              </svg>
+              <div className="text-center z-10 translate-y-2">
+                <p className="text-3xl font-mono font-black text-white">{calibratedRpm}</p>
+                <p className="text-[10px] font-black text-zinc-500 tracking-[0.3em]">RPM</p>
               </div>
-
-              {/* Boost Meter */}
-              <div className="relative flex flex-col items-center justify-center w-[130px] h-[130px] bg-zinc-950 rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.7),inset_0_4px_12px_rgba(255,255,255,0.05)] border-[5px] border-zinc-600 mb-2">
-                <svg className="absolute inset-0 w-full h-full drop-shadow-[0_2px_3px_rgba(0,0,0,0.5)]" viewBox="0 0 100 100">
-                  <path d="M 18 82 A 44 44 0 1 1 82 82" fill="none" stroke="white" strokeWidth="3.5" />
-                  <path d="M 86.5 45 A 44 44 0 0 1 82 82" fill="none" stroke="#e02828" strokeWidth="7" />
-                  <path d="M 18 82 L 23 77 M 8 50 L 16 50 M 50 6 L 50 14 M 92 50 L 84 50 M 82 82 L 77 77" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" />
-                </svg>
-                <div className="absolute top-9 left-1/2 -translate-x-1/2 flex flex-col items-center">
-                  <div className="text-white font-black text-[22px] tracking-tighter leading-none" style={{ textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}>
-                    {Math.round(virtualSpeed * 36)}
-                  </div>
-                  <div className="text-emerald-400 font-bold text-[9px] tracking-widest mt-0.5" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}>
-                    KM/H
-                  </div>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center" style={{ transform: `rotate(${-130 + (Math.abs(virtualSpeed) / 5) * 260}deg)` }}>
-                  <div className="w-[3px] h-[46px] bg-red-600 absolute bottom-1/2 origin-bottom rounded-t-full shadow-[0_2px_4px_rgba(0,0,0,0.8)] border-[0.5px] border-red-800 flex justify-center">
-                    <div className="w-[1px] h-full bg-red-400 absolute"></div>
-                  </div>
-                </div>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[20px] h-[20px] bg-zinc-300 rounded-full shadow-[0_4px_6px_rgba(0,0,0,0.7)] border-[2.5px] border-zinc-700 flex items-center justify-center">
-                  <div className="w-2 h-2 bg-zinc-900 rounded-full"></div>
-                </div>
-              </div>
-
-
+              <div 
+                className="absolute w-1 h-[70px] bg-red-500 origin-bottom rounded-full shadow-lg transition-transform duration-75"
+                style={{ bottom: '50%', transform: `rotate(${-120 + (accelNorm * 240)}deg)` }}
+              ></div>
+              <div className="w-4 h-4 bg-zinc-300 rounded-full shadow-lg border-2 border-zinc-900 z-20"></div>
             </div>
 
-            {/* RIGHT: GAS PEDAL */}
+            {/* Speed Meter */}
+            <div className="relative w-36 h-36 bg-zinc-950 rounded-full border-[6px] border-zinc-800 shadow-inner flex items-center justify-center">
+              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
+                <path d="M 20 80 A 40 40 0 1 1 80 80" fill="none" stroke="#27272a" strokeWidth="5" />
+                <path d="M 75 30 A 40 40 0 0 1 80 80" fill="none" stroke="#ef4444" strokeWidth="5" />
+              </svg>
+              <div className="text-center z-10 translate-y-2">
+                <p className="text-2xl font-mono font-black text-emerald-400">{Math.round(virtualSpeed * 36)}</p>
+                <p className="text-[8px] font-black text-zinc-500 tracking-[0.2em]">KM/H</p>
+              </div>
+              <div 
+                className="absolute w-1 h-[55px] bg-red-500 origin-bottom rounded-full shadow-lg transition-transform duration-75"
+                style={{ bottom: '50%', transform: `rotate(${-120 + ((virtualSpeed / 5) * 240)}deg)` }}
+              ></div>
+              <div className="w-3 h-3 bg-zinc-300 rounded-full shadow-lg border-2 border-zinc-900 z-20"></div>
+            </div>
+
+            {/* Gas Pedal */}
             <div
-              className="relative flex flex-col items-center mt-8 w-[104px] h-[140px] cursor-pointer select-none touch-none z-30 mr-2"
+              className={`relative flex flex-col items-center w-[100px] cursor-pointer select-none transition-transform active:scale-95`}
               onMouseDown={(e) => { e.preventDefault(); gasPressed.current = true; brakePressed.current = false; setIsGasActive(true); setIsBrakeActive(false); }}
               onMouseUp={(e) => { e.preventDefault(); gasPressed.current = false; setIsGasActive(false); }}
               onMouseLeave={(e) => { e.preventDefault(); gasPressed.current = false; setIsGasActive(false); }}
               onTouchStart={() => { gasPressed.current = true; brakePressed.current = false; setIsGasActive(true); setIsBrakeActive(false); }}
               onTouchEnd={() => { gasPressed.current = false; setIsGasActive(false); }}
             >
-              <div className={`relative w-full h-[110px] rounded-[10px] bg-gradient-to-b from-[#f2f2f2] to-[#b3b3b3] border-[2.5px] border-[#808080] shadow-[0_6px_12px_rgba(0,0,0,0.6)] transition-all flex flex-col items-center py-2 z-10 box-border ${isGasActive ? 'border-b-[3px] border-b-[#8c8c8c] translate-y-[5px]' : 'border-b-[8px] border-b-[#8c8c8c] translate-y-0'}`}>
-                <div className="grid grid-cols-3 gap-x-2 gap-y-2.5 px-3 w-full place-items-center mb-1.5 mt-1">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={`gas-${i}`} className="w-[18px] h-[18px] rounded-full bg-zinc-900 shadow-[inset_0_3px_5px_rgba(0,0,0,0.9)] border border-zinc-400/20" />
+              <div className={`relative w-full h-[110px] rounded-[15px] bg-gradient-to-b from-[#f2f2f2] to-[#b3b3b3] border-[2.5px] border-[#808080] shadow-[0_6px_12px_rgba(0,0,0,0.6)] transition-all flex flex-col items-center py-2 z-10 box-border ${isGasActive ? 'border-b-[3px] border-b-[#8c8c8c] translate-y-[5px]' : 'border-b-[8px] border-b-[#8c8c8c] translate-y-0'}`}>
+                <div className="grid grid-cols-2 gap-2 mt-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="w-3 h-3 rounded-full bg-zinc-900 shadow-inner"></div>
                   ))}
                 </div>
-                <span className="text-[#2b2b2b] font-black uppercase text-[15px] tracking-[0.1em] mt-auto mb-1.5" style={{ textShadow: "0 1px 1px rgba(255,255,255,0.9)" }}>Gas</span>
+                <span className="text-[#2b2b2b] font-black uppercase text-[12px] tracking-widest mt-auto mb-2">Gas</span>
               </div>
-              {/* Stem cylinder */}
-              <div className="absolute bottom-0 w-7 h-14 bg-gradient-to-r from-zinc-700 via-zinc-400 to-zinc-700 border-x-2 border-zinc-900 z-0 translate-y-6 shadow-xl"></div>
+              <div className="w-6 h-10 bg-zinc-700 -mt-1 rounded-b-md"></div>
+            </div>
+          </div>
+
+          {/* ALERTS LOGS */}
+          <div className="flex-1 bg-zinc-900/80 rounded-3xl border border-zinc-800/80 shadow-2xl p-6 flex flex-col min-h-[220px]">
+             <div className="flex items-center justify-between mb-4">
+               <h3 className="text-sm font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                 <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                 Alert Logs History
+               </h3>
+               <span className="text-[10px] font-mono text-zinc-600">{alerts.length} Records</span>
+             </div>
+             <div className="space-y-2 overflow-auto max-h-[160px] custom-scrollbar pr-2">
+               {alerts.length === 0 ? (
+                 <div className="h-24 flex items-center justify-center text-zinc-600 italic text-sm">
+                   No critical safety events recorded.
+                 </div>
+               ) : (
+                 alerts.slice().reverse().map((alert) => (
+                   <div 
+                    key={alert.id} 
+                    className={`flex items-center justify-between p-3 rounded-xl border transition-all hover:translate-x-1 ${
+                      alert.severity === 'high' ? 'bg-red-500/10 border-red-500/30' : 'bg-zinc-800/40 border-zinc-700/50'
+                    }`}
+                   >
+                     <div className="flex items-center gap-4">
+                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                         alert.severity === 'high' ? 'bg-red-500 text-white' : 'bg-zinc-700 text-zinc-300'
+                       }`}>
+                         {alert.type}
+                       </span>
+                       <p className="text-sm font-bold text-zinc-200">{alert.message}</p>
+                     </div>
+                     <span className="text-[10px] font-mono text-zinc-500">{utils.formatTimestamp(alert.timestamp)}</span>
+                   </div>
+                 ))
+               )}
+             </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: FATIGUE METRICS */}
+        <div className="space-y-4">
+          <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 shadow-xl group hover:border-zinc-700 transition-all">
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Eye Aspect Ratio (EAR)</p>
+            <p className="text-3xl font-mono font-black text-white">{fatigueDebug?.metrics?.ear ?? "0.00"}</p>
+            <div className="mt-3 h-1 bg-zinc-800 rounded-full overflow-hidden">
+               <div 
+                className="h-full bg-indigo-500 transition-all duration-300"
+                style={{ width: `${Math.min(100, (fatigueDebug?.metrics?.ear || 0) * 200)}%` }}
+               ></div>
+            </div>
+          </div>
+          <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 shadow-xl group hover:border-zinc-700 transition-all">
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Mouth Aspect Ratio (MAR)</p>
+            <p className="text-3xl font-mono font-black text-white">{fatigueDebug?.metrics?.mar ?? "0.00"}</p>
+            <div className="mt-3 h-1 bg-zinc-800 rounded-full overflow-hidden">
+               <div 
+                className="h-full bg-fuchsia-500 transition-all duration-300"
+                style={{ width: `${Math.min(100, (fatigueDebug?.metrics?.mar || 0) * 100)}%` }}
+               ></div>
+            </div>
+          </div>
+          <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 shadow-xl group hover:border-zinc-700 transition-all">
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Fatigue Score</p>
+            <div className="flex items-center gap-3">
+              <p className="text-4xl font-black text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.3)]">{fatigueDebug?.fatigue_score ?? "0"}</p>
+              <div className="flex-1 space-y-1">
+                <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-red-500 transition-all duration-500"
+                    style={{ width: `${Math.min(100, fatigueDebug?.fatigue_score || 0)}%` }}
+                  ></div>
+                </div>
+                <p className="text-[8px] font-bold text-zinc-500 text-right uppercase tracking-[0.2em]">Risk Level</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 shadow-xl group hover:border-zinc-700 transition-all">
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Last Detection Event</p>
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-zinc-800 rounded-xl">
+                <svg className="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <p className="text-sm font-black text-white uppercase italic tracking-tighter truncate">
+                {fatigueDebug?.event?.replace('_', ' ') || "Scanning..."}
+              </p>
             </div>
           </div>
         </div>
+      </main>
 
-        {/* Debug + request context below, so it doesn't distort the main panel */}
-        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-          <div className="rounded-lg bg-gray-800 p-5">
-            <h2 className="mb-3 text-lg font-semibold">Request Context</h2>
-            <label className="mb-2 block text-sm text-gray-300">Driver ID</label>
-            <input
-              className="mb-3 w-full rounded bg-gray-700 p-2 text-sm outline-none"
-              value={driverId}
-              onChange={(e) => setDriverId(e.target.value)}
-            />
-            <label className="mb-2 block text-sm text-gray-300">Session ID</label>
-            <input
-              className="w-full rounded bg-gray-700 p-2 text-sm outline-none"
-              value={sessionId}
-              onChange={(e) => setSessionId(e.target.value)}
-            />
-            {requestError && <p className="mt-3 rounded bg-red-700 px-3 py-2 text-sm">{requestError}</p>}
-          </div>
-
-          <div className="rounded-lg bg-gray-800 p-5">
-            <h2 className="mb-3 text-lg font-semibold">Fatigue Debug</h2>
-            {!fatigueDebug ? (
-              <p className="text-sm text-gray-400">No fatigue response yet. Start test and face camera.</p>
-            ) : (
-              <div className="space-y-1 text-sm">
-                <p>Status: <span className="font-semibold">{fatigueDebug.status}</span></p>
-                <p>Score: {fatigueDebug.fatigue_score}</p>
-                <p>Event: {fatigueDebug.event || 'none'}</p>
-                <p>EAR: {fatigueDebug.metrics?.ear ?? '-'}</p>
-                <p>MAR: {fatigueDebug.metrics?.mar ?? '-'}</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-6 rounded-lg bg-gray-800 p-5">
-          <h2 className="mb-3 text-lg font-semibold">Alert History</h2>
-          <div className="max-h-56 space-y-2 overflow-auto">
-            {alerts.length === 0 ? (
-              <p className="text-sm text-gray-400">No alerts yet.</p>
-            ) : (
-              alerts.slice().reverse().map((alert) => (
-                <div key={alert.id} className="rounded bg-gray-700 px-3 py-2 text-sm">
-                  <p>{alert.message}</p>
-                  <p className="text-xs text-gray-300">{utils.formatTimestamp(alert.timestamp)}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
+      {/* Global CSS for scrollbars and animations */}
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #3f3f46;
+          border-radius: 10px;
+        }
+        .animate-shake {
+          animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+          10%, 90% { transform: translate3d(-1px, 0, 0); }
+          20%, 80% { transform: translate3d(2px, 0, 0); }
+          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+          40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+      `}</style>
     </div>
   );
 };
 
 export default AiServiceTest;
+
