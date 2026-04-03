@@ -3,7 +3,7 @@ import { cameraUtils } from '../utils/utils.js';
 import useAppStore from '../store/appStore.js';
 import aiService from '../services/aiService.js';
 
-export const useCamera = ({ driverId, sessionId }) => {
+export const useCamera = ({ driverId, sessionId, onFatigueUpdate, onFatigueError } = {}) => {
   const videoRef = useRef(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const intervalRef = useRef(null);
@@ -40,7 +40,7 @@ export const useCamera = ({ driverId, sessionId }) => {
     if (!driverId || !sessionId || intervalRef.current) return;
 
     intervalRef.current = setInterval(async () => {
-      if (!videoRef.current || !isStreaming || fatigueInFlightRef.current) return;
+      if (!videoRef.current || !videoRef.current.srcObject || fatigueInFlightRef.current) return;
 
       try {
         fatigueInFlightRef.current = true;
@@ -56,22 +56,23 @@ export const useCamera = ({ driverId, sessionId }) => {
         if (!fatigue) return;
 
         setFatigueStatus(fatigue.status || 'alert');
-        if (fatigue.event) {
+        onFatigueUpdate?.(fatigue);
+        if (fatigue.status === 'no_face') {
+          addAlert({
+            type: 'fatigue',
+            severity: 'medium',
+            message: 'No face detected in camera frame',
+          });
+        } else if (fatigue.event) {
           addAlert({
             type: 'fatigue',
             severity: fatigue.status === 'drowsy' ? 'high' : 'medium',
             message: `Fatigue: ${fatigue.event.replace('_', ' ')}`,
           });
-          if (fatigue.status === 'no_face') {
-            addAlert({
-              type: 'fatigue',
-              severity: 'medium',
-              message: 'No face detected in camera frame',
-            });
-          }
         }
       } catch (error) {
         console.error('Fatigue detection failed:', error);
+        onFatigueError?.(error);
       } finally {
         fatigueInFlightRef.current = false;
       }
