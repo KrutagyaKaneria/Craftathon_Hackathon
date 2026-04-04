@@ -14,10 +14,24 @@ const router = express.Router();
 
 /**
  * Vehicle Routes
- * All routes require authentication for owner-based multi-tenant access control
+ * Public routes for web app driver selection (no auth required)
+ * Protected routes for native app and management (auth required)
  */
 
-// All vehicle routes require authentication
+// PUBLIC ROUTES - No authentication required
+// Get available vehicles for a specific owner (used in web app for driver selection)
+// GET /api/vehicles/public/available?ownerId=xxx
+router.get('/public/available', getAllVehicles);
+
+// ============================================
+// NATIVE APP PROTECTED ROUTES (Auth required)
+// ============================================
+
+// Get available vehicles for logged-in owner ONLY (REQUIRES AUTH - for native app)
+// GET /api/vehicles/native/available
+router.get('/native/available', verifyAuth, getAllVehicles);
+
+// All other vehicle routes require authentication
 router.use(verifyAuth);
 
 // Get all vehicles (with optional filters)

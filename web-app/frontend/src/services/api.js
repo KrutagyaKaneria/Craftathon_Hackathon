@@ -1,11 +1,15 @@
 import axios from 'axios';
 
+// Backend API URL - Configure with your machine IP
+const BACKEND_IP = import.meta.env.VITE_API_URL || '10.145.246.155:5000/api';
+const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://10.145.246.155:8000';
+
 const backendApi = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: BACKEND_IP,
 });
 
 const aiApi = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL: AI_SERVICE_URL,
 });
 
 // ============================================
@@ -124,9 +128,39 @@ export const apiService = {
     };
   },
 
-  getDrivers: async (ownerId) => {
+  // Get ALL drivers from database - PUBLIC route, no authentication required
+  getPublicDrivers: async () => {
     try {
-      // Require authentication
+      console.log('📥 Fetching all drivers from public route...');
+      const response = await backendApi.get('/drivers/public/all');
+      const drivers = response.data?.data || response.data || [];
+      console.log('✅ Public drivers fetched successfully:', drivers.length);
+      return Array.isArray(drivers) ? drivers : [];
+    } catch (error) {
+      console.error('❌ Failed to fetch public drivers:', error.message);
+      throw new Error(getErrorMessage(error, 'Failed to load drivers list'));
+    }
+  },
+
+  // Get driver analytics - requires authentication
+  getDriverAnalytics: async (driverId) => {
+    try {
+      if (!apiService.isAuthenticated()) {
+        throw new Error('Authentication required');
+      }
+      console.log('📥 Fetching driver analytics for:', driverId);
+      const response = await backendApi.get(`/drivers/${driverId}/analytics`);
+      console.log('✅ Driver analytics fetched successfully');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Failed to fetch driver analytics:', error.message);
+      throw new Error(getErrorMessage(error, 'Failed to load driver analytics'));
+    }
+  },
+
+  // Get authenticated owner's drivers - PROTECTED route, requires authentication
+  getOwnerDrivers: async (ownerId) => {
+    try {
       if (!apiService.isAuthenticated()) {
         throw new Error('Authentication required - please log in');
       }
@@ -141,15 +175,43 @@ export const apiService = {
         throw new Error('Owner ID not found - please log in again');
       }
       
-      const url = `/drivers?ownerId=${ownerId}`;
-      console.log('📥 Fetching drivers from:', url);
-      
-      const response = await backendApi.get(url);
-      console.log('✅ Drivers fetched successfully:', response.data?.count || response.data?.data?.length || 0);
-      return response.data?.success ? response.data.data : response.data;
+      console.log('📥 Fetching authenticated owner drivers from:', ownerId);
+      const response = await backendApi.get(`/drivers/owner/me?ownerId=${ownerId}`);
+      const drivers = response.data?.data || response.data || [];
+      console.log('✅ Owner drivers fetched successfully:', drivers.length);
+      return Array.isArray(drivers) ? drivers : [];
+    } catch (error) {
+      console.error('❌ Failed to fetch owner drivers:', error.message);
+      throw new Error(getErrorMessage(error, 'Failed to load drivers - authentication may be required'));
+    }
+  },
+
+  // Backwards compatibility - get drivers (tries public first, then owner if authenticated)
+  getDrivers: async (ownerId) => {
+    try {
+      // Try public route first (no auth required)
+      if (!ownerId && !apiService.isAuthenticated()) {
+        console.log('ℹ️ No authentication - using public drivers endpoint');
+        return await apiService.getPublicDrivers();
+      }
+
+      // If authenticated or ownerId provided, use owner route
+      if (apiService.isAuthenticated()) {
+        if (!ownerId) {
+          ownerId = localStorage.getItem('ownerId');
+        }
+        if (ownerId) {
+          console.log('ℹ️ Authenticated - using owner drivers endpoint');
+          return await apiService.getOwnerDrivers(ownerId);
+        }
+      }
+
+      // Fallback to public if nothing else works
+      console.log('ℹ️ Fallback - using public drivers endpoint');
+      return await apiService.getPublicDrivers();
     } catch (error) {
       console.error('❌ Failed to fetch drivers:', error.message);
-      throw new Error(getErrorMessage(error, 'Failed to load drivers - authentication may be required'));
+      throw error;
     }
   },
 
@@ -168,9 +230,16 @@ export const apiService = {
 
   getAvailableVehicles: async (ownerId) => {
     try {
-      const url = ownerId ? `/vehicles?status=available&ownerId=${ownerId}` : '/vehicles?status=available';
+      if (!ownerId) {
+        throw new Error('Owner ID is required to fetch vehicles');
+      }
+      // Use public endpoint - no authentication required
+      const url = `/vehicles/public/available?status=available&ownerId=${ownerId}`;
+      console.log('📥 Fetching available vehicles for owner:', ownerId);
       const response = await backendApi.get(url);
-      return response.data?.success ? response.data.data : response.data;
+      const vehicles = response.data?.data || response.data || [];
+      console.log('✅ Available vehicles fetched:', vehicles.length);
+      return Array.isArray(vehicles) ? vehicles : [];
     } catch (error) {
       throw new Error(getErrorMessage(error, 'Failed to load vehicles'));
     }

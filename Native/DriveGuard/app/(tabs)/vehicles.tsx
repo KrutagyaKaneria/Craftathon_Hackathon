@@ -281,6 +281,17 @@ const styles = StyleSheet.create({
     marginTop: 12,
     gap: 12,
   },
+  twoColumnRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  detailBox: {
+    flex: 1,
+    backgroundColor: 'rgba(28, 37, 62, 0.3)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -298,6 +309,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#dfe4fe',
     fontWeight: '700',
+    textAlign: 'right',
   },
   graphContainer: {
     backgroundColor: 'rgba(28, 37, 62, 0.3)',
@@ -306,20 +318,28 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 120,
+    height: 140,
+  },
+  graphTitle: {
+    fontSize: 10,
+    color: '#a5aac2',
+    fontWeight: '600',
+    marginBottom: 8,
+    letterSpacing: 0.5,
   },
   graphBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-around',
-    gap: 8,
+    gap: 6,
     flex: 1,
     width: '100%',
   },
   bar: {
-    width: '25%',
+    flex: 1,
     backgroundColor: '#a3a6ff',
     borderRadius: 4,
+    minHeight: 4,
   },
   barLabel: {
     fontSize: 8,
@@ -427,6 +447,26 @@ const VehicleCard = ({ vehicle, isExpanded, onPress }: VehicleCardProps) => {
   const safetyRating = vehicle.safety_rating || 85;
   const fuelLevel = vehicle.fuel_level || 75;
   const mileage = vehicle.mileage || 0;
+  const model = vehicle.model || 'Unknown Model';
+  const year = vehicle.year || 'N/A';
+  const status = vehicle.status || 'operational';
+  const assignedDriver = vehicle.assigned_driver_name || (vehicle.assigned_driver ? 'Assigned' : 'Unassigned');
+  const protocolStatus = vehicle.protocol_status || 'IDLE';
+  
+  // Parse location coordinates
+  const getLongitude = () => {
+    if (vehicle.location?.coordinates?.[0]) {
+      return vehicle.location.coordinates[0].toFixed(4);
+    }
+    return 'N/A';
+  };
+  
+  const getLatitude = () => {
+    if (vehicle.location?.coordinates?.[1]) {
+      return vehicle.location.coordinates[1].toFixed(4);
+    }
+    return 'N/A';
+  };
 
   return (
     <Pressable 
@@ -464,52 +504,113 @@ const VehicleCard = ({ vehicle, isExpanded, onPress }: VehicleCardProps) => {
             <Text style={styles.metricText}>{fuelLevel}%</Text>
           </View>
           <View style={styles.statusBadge}>
-            <FontAwesome6 name="circle" size={6} color={(vehicle as any).in_transit ? '#3adffa' : '#6dfe9c'} />
-            <Text style={styles.statusText}>{(vehicle as any).in_transit ? 'IN_TRANSIT' : 'IDLE'}</Text>
+            <FontAwesome6 name="circle" size={6} color={vehicle.in_transit ? '#3adffa' : '#6dfe9c'} />
+            <Text style={styles.statusText}>{vehicle.in_transit ? 'IN_TRANSIT' : protocolStatus}</Text>
           </View>
         </View>
 
         {/* Expanded Details */}
         {isExpanded && (
           <View style={styles.expandedDetails}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Status</Text>
-              <Text style={styles.detailValue}>{vehicle.status || 'operational'}</Text>
+            {/* Row 1: Model and Year */}
+            <View style={styles.twoColumnRow}>
+              <View style={styles.detailBox}>
+                <Text style={styles.detailLabel}>Model</Text>
+                <Text style={styles.detailValue}>{model}</Text>
+              </View>
+              <View style={styles.detailBox}>
+                <Text style={styles.detailLabel}>Year</Text>
+                <Text style={styles.detailValue}>{year}</Text>
+              </View>
             </View>
+
+            {/* Row 2: Safety and Fuel */}
+            <View style={styles.twoColumnRow}>
+              <View style={styles.detailBox}>
+                <Text style={styles.detailLabel}>Safety Rating</Text>
+                <Text style={[styles.detailValue, { color: safetyRating >= 85 ? '#6dfe9c' : safetyRating >= 70 ? '#FFD700' : '#ff6e84' }]}>
+                  {safetyRating}%
+                </Text>
+              </View>
+              <View style={styles.detailBox}>
+                <Text style={styles.detailLabel}>Fuel Level</Text>
+                <Text style={[styles.detailValue, { color: fuelLevel >= 50 ? '#6dfe9c' : fuelLevel >= 30 ? '#FFD700' : '#ff6e84' }]}>
+                  {fuelLevel}%
+                </Text>
+              </View>
+            </View>
+
+            {/* Row 3: Status and Protocol */}
+            <View style={styles.twoColumnRow}>
+              <View style={styles.detailBox}>
+                <Text style={styles.detailLabel}>Status</Text>
+                <Text style={styles.detailValue}>{status.toUpperCase()}</Text>
+              </View>
+              <View style={styles.detailBox}>
+                <Text style={styles.detailLabel}>Protocol Status</Text>
+                <Text style={styles.detailValue}>{protocolStatus}</Text>
+              </View>
+            </View>
+
+            {/* Row 4: Mileage */}
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Mileage</Text>
-              <Text style={styles.detailValue}>{mileage} km</Text>
+              <Text style={styles.detailValue}>{mileage.toLocaleString()} km</Text>
             </View>
+
+            {/* Row 5: Location */}
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Location</Text>
               <Text style={styles.detailValue}>
-                {typeof vehicle.location === 'string' ? (vehicle.location || 'N/A') : (vehicle.location?.coordinates ? `${vehicle.location.coordinates[0]}, ${vehicle.location.coordinates[1]}` : 'N/A')}
+                {getLongitude()}, {getLatitude()}
               </Text>
             </View>
+
+            {/* Row 6: Assigned Driver */}
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Assigned To</Text>
-              <Text style={styles.detailValue}>
-                {typeof vehicle.assigned_driver === 'string' ? (vehicle.assigned_driver || 'Unassigned') : 'Unassigned'}
-              </Text>
+              <Text style={styles.detailValue}>{assignedDriver}</Text>
             </View>
+
+            {/* Row 7: Maintenance Due */}
+            {vehicle.maintenance_due && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Maintenance Due</Text>
+                <Text style={styles.detailValue}>
+                  {new Date(vehicle.maintenance_due).toLocaleDateString()}
+                </Text>
+              </View>
+            )}
+
+            {/* Row 8: VIN */}
+            {vehicle.vin && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>VIN</Text>
+                <Text style={[styles.detailValue, { fontSize: 10 }]}>{vehicle.vin}</Text>
+              </View>
+            )}
+
+            {/* Notes/Condition */}
+            {vehicle.notes && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Condition</Text>
+                <Text style={styles.detailValue}>{vehicle.notes}</Text>
+              </View>
+            )}
             
-            {/* Simple Performance Bar Chart */}
-            <View style={styles.graphContainer}>
-              <View style={styles.graphBar}>
-                <View style={[styles.bar, { height: `${safetyRating}%` as any }]}>
-                  <Text style={styles.barLabel}>Safety</Text>
-                </View>
-                <View style={[styles.bar, { height: `${fuelLevel}%` as any }]}>
-                  <Text style={styles.barLabel}>Fuel</Text>
-                </View>
-                <View style={[styles.bar, { height: `${Math.min((vehicle.recent_performance || 80), 100)}%` as any }]}>
-                  <Text style={styles.barLabel}>Perf</Text>
-                </View>
-                <View style={[styles.bar, { height: `${Math.min(mileage / 1000, 100)}%` as any }]}>
-                  <Text style={styles.barLabel}>Mile</Text>
+            {/* Performance Chart */}
+            {vehicle.recent_performance && vehicle.recent_performance.length > 0 && (
+              <View style={styles.graphContainer}>
+                <Text style={styles.graphTitle}>7-Day Performance</Text>
+                <View style={styles.graphBar}>
+                  {vehicle.recent_performance.map((perf, idx) => (
+                    <View key={idx} style={[styles.bar, { height: `${Math.min(perf, 100)}%` as any }]}>
+                      <Text style={styles.barLabel}>{idx + 1}D</Text>
+                    </View>
+                  ))}
                 </View>
               </View>
-            </View>
+            )}
           </View>
         )}
       </View>

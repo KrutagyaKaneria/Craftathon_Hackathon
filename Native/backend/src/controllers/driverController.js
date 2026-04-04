@@ -10,11 +10,14 @@ import { Alert } from '../models/Alert.js';
 
 export const getAllDrivers = async (req, res) => {
   try {
-    // Get ownerId from authenticated token or query parameter
-    let ownerId = req.ownerId; // From JWT token (verifyAuth middleware)
-    if (req.query.ownerId) {
-      // If query parameter provided, use it but verify it matches the authenticated owner
-      // This prevents a user from requesting another user's drivers
+    // Check if this is a public request (no auth) or authenticated request
+    const isAuthenticated = !!req.ownerId;
+    const isPublicRoute = req.path === '/public/all' || req.baseUrl?.includes('/public/all');
+
+    let ownerId = req.ownerId; // From JWT token (if authenticated)
+    
+    // If authenticated AND query parameter provided, verify ownership
+    if (isAuthenticated && req.query.ownerId) {
       if (req.ownerId && req.query.ownerId !== req.ownerId) {
         console.error(`❌ Owner mismatch - Token owner: ${req.ownerId}, Query owner: ${req.query.ownerId}`);
         return res.status(403).json({
@@ -25,32 +28,56 @@ export const getAllDrivers = async (req, res) => {
       ownerId = req.query.ownerId;
     }
 
+    // PUBLIC ROUTE: Return ALL drivers from database (no auth required)
+    if (isPublicRoute || !isAuthenticated) {
+      console.log('📥 PUBLIC REQUEST: Fetching ALL drivers from database (no owner filter)');
+      
+      const allDrivers = await Driver.find({})
+        .select('-password')
+        .sort({ createdAt: -1 })
+        .lean();
+
+      console.log(`✅ Loaded ${allDrivers.length} drivers total from database`);
+      allDrivers.slice(0, 3).forEach((driver, index) => {
+        console.log(`  [${index + 1}] ${driver.firstName} ${driver.lastName || ''} (Owner: ${driver.ownerId})`);
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: allDrivers,
+        count: allDrivers.length,
+        message: 'All drivers (public access - no authentication required)'
+      });
+    }
+
+    // AUTHENTICATED ROUTE: Return ONLY owner's drivers
     if (!ownerId) {
-      console.error('❌ No owner ID found in token or query parameters');
+      console.error('❌ No owner ID found in authentication token');
       return res.status(401).json({
         success: false,
         message: 'Authentication required - owner ID not found',
       });
     }
 
-    console.log('👤 Fetching drivers for owner:', ownerId);
+    console.log('🔐 AUTHENTICATED REQUEST: Fetching drivers for owner:', ownerId);
 
     // Fetch ONLY drivers belonging to the authenticated owner
-    const drivers = await Driver.find({ ownerId })
+    const ownerDrivers = await Driver.find({ ownerId })
       .select('-password')
       .sort({ createdAt: -1 })
       .lean();
 
-    console.log(`✅ Loaded ${drivers.length} drivers for owner ${ownerId}`);
-    drivers.forEach((driver, index) => {
-      console.log(`  [${index + 1}] ${driver.firstName} ${driver.lastName || ''} (${driver.email}): profilePhoto ${driver.profilePhoto ? '✓ ' + (driver.profilePhoto.length / 1024 / 1024).toFixed(2) + 'MB' : '✗'}`);
+    console.log(`✅ Loaded ${ownerDrivers.length} drivers for owner ${ownerId}`);
+    ownerDrivers.forEach((driver, index) => {
+      console.log(`  [${index + 1}] ${driver.firstName} ${driver.lastName || ''} (${driver.email})`);
     });
 
     return res.status(200).json({
       success: true,
-      data: drivers,
-      count: drivers.length,
-      ownerId: ownerId
+      data: ownerDrivers,
+      count: ownerDrivers.length,
+      ownerId: ownerId,
+      message: 'Drivers for authenticated owner (authentication required)'
     });
   } catch (error) {
     console.error('❌ Get all drivers error:', error);
@@ -432,6 +459,22 @@ export const getDriverAnalytics = async (req, res) => {
     // Fetch all sessions for this driver
     const sessions = await Session.find({ driverId }).sort({ startTime: -1 }).lean();
 
+    // Get all alerts for this driver to calculate dynamic safety score (used for all cases)
+    const alerts = await Alert.find({ driverId }).lean();
+    const highSeverityAlertCount = alerts.filter(a => a.severity === 'high').length;
+    const mediumSeverityAlertCount = alerts.filter(a => a.severity === 'medium').length;
+    const lowSeverityAlertCount = alerts.filter(a => a.severity === 'low').length;
+
+    // Calculate safety score based on alerts (same formula as frontend)
+    // High severity: -15 points, Medium: -8 points, Low: -3 points
+    const calculatedSafetyScore = Math.max(0, Math.min(100, 
+      100 - (highSeverityAlertCount * 15) - (mediumSeverityAlertCount * 8) - (lowSeverityAlertCount * 3)
+    ));
+
+    console.log(`📊 Safety Score Calculation for ${driverId}:`);
+    console.log(`   High: ${highSeverityAlertCount} (-15 ea), Medium: ${mediumSeverityAlertCount} (-8 ea), Low: ${lowSeverityAlertCount} (-3 ea)`);
+    console.log(`   Calculated Safety Score: ${calculatedSafetyScore}%`);
+
     if (sessions.length === 0) {
       console.log('ℹ️ No sessions found for driver:', driverId);
       return res.status(200).json({
@@ -440,13 +483,13 @@ export const getDriverAnalytics = async (req, res) => {
           driverId,
           driverName: `${driver.firstName} ${driver.lastName}`,
           totalSessions: 0,
-          averageSafetyScore: 100,
+          averageSafetyScore: calculatedSafetyScore,
           totalDutyHours: 0,
           totalDutyMinutes: 0,
           totalDistanceCovered: 0,
-          totalAlerts: 0,
+          totalAlerts: alerts.length,
           perfectPerformanceSessions: 0,
-          performanceRating: 5.0,
+          performanceRating: (calculatedSafetyScore / 100 * 5).toFixed(1),
           recentPerformance: [],
           safetyTrend: [],
           lastSessionDate: null,
@@ -468,8 +511,8 @@ export const getDriverAnalytics = async (req, res) => {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     sessions.forEach((session) => {
-      // Aggregate safety scores
-      totalSafetyScore += session.safetyScore || 100;
+      // Use calculated safety score for recent sessions
+      totalSafetyScore += calculatedSafetyScore;
 
       // Calculate duty time
       if (session.startTime && session.endTime) {
@@ -486,7 +529,7 @@ export const getDriverAnalytics = async (req, res) => {
       totalDistance += session.distanceCovered || 0;
 
       // Perfect performance: 0 alerts AND safety score > 90
-      if ((session.alertsCount === 0 || !session.alertsCount) && (session.safetyScore || 100) > 90) {
+      if ((session.alertsCount === 0 || !session.alertsCount) && calculatedSafetyScore > 90) {
         perfectPerformanceSessions += 1;
       }
 
@@ -494,7 +537,7 @@ export const getDriverAnalytics = async (req, res) => {
       if (recentPerformance.length < 10) {
         recentPerformance.push({
           date: session.startTime,
-          safetyScore: session.safetyScore || 100,
+          safetyScore: calculatedSafetyScore,
           alerts: session.alertsCount || 0,
           duration: session.duration,
           distance: session.distanceCovered || 0,
@@ -506,15 +549,15 @@ export const getDriverAnalytics = async (req, res) => {
       if (new Date(session.startTime) >= sevenDaysAgo) {
         safetyTrend.push({
           date: session.startTime,
-          score: session.safetyScore || 100,
+          score: calculatedSafetyScore,
         });
       }
     });
 
     // Calculate averages
-    const averageSafetyScore = Math.round(totalSafetyScore / sessions.length);
+    const averageSafetyScore = sessions.length > 0 ? Math.round(totalSafetyScore / sessions.length) : calculatedSafetyScore;
     const totalDutyHours = (totalDutyMinutes / 60).toFixed(2);
-    const perfectPerformancePercentage = Math.round((perfectPerformanceSessions / sessions.length) * 100);
+    const perfectPerformancePercentage = sessions.length > 0 ? Math.round((perfectPerformanceSessions / sessions.length) * 100) : (calculatedSafetyScore > 90 ? 100 : 0);
 
     // Calculate performance rating (0-5.0 stars)
     // Based on: safety score (70%), perfect performance (20%), low alerts (10%)

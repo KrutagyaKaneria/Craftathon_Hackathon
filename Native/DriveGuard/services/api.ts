@@ -5,7 +5,7 @@ import { safeStorage } from '../utils/safeStorage';
 // For LOCAL DEVELOPMENT: http://YOUR_LOCAL_IP:5000
 // For PRODUCTION: https://your-backend-domain.com
 // Get your local IP: ipconfig (Windows) or ifconfig (Mac/Linux)
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.61.65.199:5000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.145.246.155:5000';
 
 // Create axios instance
 const apiClient = axios.create({
@@ -151,6 +151,98 @@ export const sessionsAPI = {
     } catch (error: any) {
       throw {
         message: error.response?.data?.message || 'Failed to update telemetry',
+        status: error.response?.status
+      };
+    }
+  },
+};
+
+// Drivers API calls (Native App - Authenticated only)
+export const driversAPI = {
+  // Get own drivers for authenticated owner (NATIVE APP - REQUIRES TOKEN)
+  getOwnDrivers: async () => {
+    try {
+      console.log('📱 Native App: Fetching own drivers (authenticated)');
+      const response = await apiClient.get('/api/drivers/owner/me');
+      console.log(`✅ Fetched ${response.data?.data?.length || 0} drivers for authenticated owner`);
+      return response.data?.data || [];
+    } catch (error: any) {
+      console.error('❌ Failed to fetch own drivers:', error.message);
+      throw {
+        message: error.response?.data?.message || 'Failed to fetch drivers',
+        status: error.response?.status
+      };
+    }
+  },
+
+  // Get driver by ID
+  getDriver: async (driverId: string) => {
+    try {
+      const response = await apiClient.get(`/api/drivers/${driverId}`);
+      return response.data?.data || response.data;
+    } catch (error: any) {
+      throw {
+        message: error.response?.data?.message || 'Failed to fetch driver',
+        status: error.response?.status
+      };
+    }
+  },
+
+  // Get driver analytics
+  getAnalytics: async (driverId: string) => {
+    try {
+      const response = await apiClient.get(`/api/drivers/${driverId}/analytics`);
+      return response.data?.data || response.data;
+    } catch (error: any) {
+      throw {
+        message: error.response?.data?.message || 'Failed to fetch analytics',
+        status: error.response?.status
+      };
+    }
+  },
+};
+
+// Vehicles API calls (Native App - Authenticated only)
+export const vehiclesAPI = {
+  // Get available vehicles for authenticated owner (NATIVE APP - REQUIRES TOKEN)
+  getAvailableVehicles: async () => {
+    try {
+      console.log('📱 Native App: Fetching available vehicles (authenticated)');
+      const response = await apiClient.get('/api/vehicles/native/available?status=available');
+      console.log(`✅ Fetched ${response.data?.data?.length || 0} vehicles for authenticated owner`);
+      return response.data?.data || [];
+    } catch (error: any) {
+      console.error('❌ Failed to fetch available vehicles:', error.message);
+      throw {
+        message: error.response?.data?.message || 'Failed to fetch vehicles',
+        status: error.response?.status
+      };
+    }
+  },
+
+  // Get vehicle by ID
+  getVehicle: async (vehicleId: string) => {
+    try {
+      const response = await apiClient.get(`/api/vehicles/${vehicleId}`);
+      return response.data?.data || response.data;
+    } catch (error: any) {
+      throw {
+        message: error.response?.data?.message || 'Failed to fetch vehicle',
+        status: error.response?.status
+      };
+    }
+  },
+
+  // Lock/Allocate vehicle
+  lockVehicle: async (vehicleId: string, driverId: string) => {
+    try {
+      const response = await apiClient.post(`/api/vehicles/${vehicleId}/lock`, {
+        driverId
+      });
+      return response.data;
+    } catch (error: any) {
+      throw {
+        message: error.response?.data?.message || 'Failed to allocate vehicle',
         status: error.response?.status
       };
     }

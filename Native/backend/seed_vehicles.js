@@ -1,12 +1,14 @@
 import { connectDB } from './src/config/database.js';
 import { Driver } from './src/models/Driver.js';
 import { Vehicle } from './src/models/Vehicle.js';
+import { generateRandomVehicleData, generateRandomVehicles } from './src/utils/vehicleGenerator.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 /**
- * Seeder script to provide sample buses for all existing drivers
+ * Seeder script to provide diverse sample vehicles for all existing drivers
+ * Each vehicle gets UNIQUE, RANDOM data - no duplicates!
  */
 const seedBuses = async () => {
   try {
@@ -20,65 +22,57 @@ const seedBuses = async () => {
     }
 
     const uniqueOwnerIds = [...new Set(drivers.map(d => d.ownerId.toString()))];
-    console.log(`✅ Found ${uniqueOwnerIds.length} unique owners.`);
+    console.log(`✅ Found ${uniqueOwnerIds.length} unique owners.\n`);
 
     for (const ownerId of uniqueOwnerIds) {
-      console.log(`🚌 Checking buses for owner: ${ownerId}`);
+      console.log(`🚌 Processing Owner: ${ownerId}`);
       
       const existingCount = await Vehicle.countDocuments({ ownerId });
-      if (existingCount >= 3) {
-        console.log(`   - Owner already has ${existingCount} buses. Skipping...`);
-        // Just ensure they are 'available'
-        await Vehicle.updateMany({ ownerId }, { status: 'available' });
+      if (existingCount >= 6) {
+        console.log(`   ✓ Owner already has ${existingCount} vehicles. Skipping...\n`);
         continue;
       }
 
-      const needed = 3 - existingCount;
-      console.log(`   - Creating ${needed} sample buses...`);
+      const needed = 6 - existingCount;
+      console.log(`   Creating ${needed} completely unique vehicles with different data...\n`);
 
-      const sampleData = [
-        { 
-          vehicle_number: `BUS-${ownerId.slice(-4)}-01`, 
-          vehicle_name: 'Metro Transit Pulsar', 
-          model: 'Volvo 9400 B11R', 
-          year: 2023, 
-          status: 'available', 
-          fuel_level: 85, 
-          mileage: 12500, 
-          safety_rating: 92 
-        },
-        { 
-          vehicle_number: `BUS-${ownerId.slice(-4)}-02`, 
-          vehicle_name: 'City Link Connect', 
-          model: 'Scania Metroliner', 
-          year: 2022, 
-          status: 'available', 
-          fuel_level: 65, 
-          mileage: 25000, 
-          safety_rating: 88 
-        },
-        { 
-          vehicle_number: `BUS-${ownerId.slice(-4)}-03`, 
-          vehicle_name: 'InterCity Voyager', 
-          model: 'Mercedes-Benz Travego', 
-          year: 2024, 
-          status: 'available', 
-          fuel_level: 95, 
-          mileage: 5000, 
-          safety_rating: 95 
+      // Generate 6 completely unique vehicles - each with different random data!
+      const randomFleet = generateRandomVehicles(ownerId, needed);
+
+      for (let i = 0; i < randomFleet.length; i++) {
+        try {
+          const vehicleData = randomFleet[i];
+          const vehicle = new Vehicle({ 
+            ...vehicleData,
+            ownerId 
+          });
+          
+          await vehicle.save();
+          
+          console.log(`   ✅ ${vehicle.vehicle_number}`);
+          console.log(`      Model: ${vehicle.model}`);
+          console.log(`      Safety: ${vehicle.safety_rating}% | Fuel: ${vehicle.fuel_level}% | Mileage: ${vehicle.mileage}km`);
+          console.log(`      Status: ${vehicle.status} | Protocol: ${vehicle.protocol_status}`);
+          console.log(`      Condition: ${vehicle.notes}\n`);
+          
+        } catch (err) {
+          if (!err.message.includes('duplicate')) {
+            console.log(`   ⚠️  Error: ${err.message}`);
+          } else {
+            console.log(`   ⚠️  Vehicle already exists (skipped)`);
+          }
         }
-      ].slice(0, needed);
-
-      for (const v of sampleData) {
-        await Vehicle.create({ ownerId, ...v });
-        console.log(`     ✓ Created: ${v.vehicle_number}`);
       }
+
+      // Print summary for this owner
+      const totalCount = await Vehicle.countDocuments({ ownerId });
+      console.log(`   📊 Owner now has ${totalCount} total vehicles\n`);
     }
 
-    console.log('\n🌟 Database seeding complete. Refresh your vehicle selection screen!');
+    console.log('✅ Seeding completed successfully!');
     process.exit(0);
   } catch (error) {
-    console.error('❌ Seeding error:', error.message);
+    console.error('❌ Error during seeding:', error);
     process.exit(1);
   }
 };

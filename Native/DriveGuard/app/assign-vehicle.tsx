@@ -96,6 +96,7 @@ const styles = StyleSheet.create({
   },
   vehicleInfo: {
     flex: 1,
+    gap: 4,
   },
   vehicleName: {
     fontSize: 14,
@@ -106,6 +107,56 @@ const styles = StyleSheet.create({
   vehicleNumber: {
     fontSize: 11,
     color: '#a5aac2',
+    fontWeight: '600',
+  },
+  vehicleModel: {
+    fontSize: 10,
+    color: '#7a7f9a',
+    fontWeight: '500',
+  },
+  vehicleMetrics: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+    flexWrap: 'wrap',
+  },
+  metricBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(163, 166, 255, 0.1)',
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(163, 166, 255, 0.3)',
+  },
+  metricBadgeText: {
+    fontSize: 8,
+    color: '#a3a6ff',
+    fontWeight: '600',
+  },
+  fuelBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(109, 254, 156, 0.1)',
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(109, 254, 156, 0.3)',
+  },
+  fuelBadgeText: {
+    fontSize: 8,
+    color: '#6dfe9c',
+    fontWeight: '600',
+  },
+  warningBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(255, 138, 76, 0.1)',
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 138, 76, 0.3)',
+  },
+  warningBadgeText: {
+    fontSize: 8,
+    color: '#ff8a4c',
     fontWeight: '600',
   },
   statusBadge: {
@@ -348,8 +399,66 @@ export default function AssignVehicleScreen() {
                   </View>
 
                   <View style={styles.vehicleInfo}>
-                    <Text style={styles.vehicleName}>{vehicle.vehicle_name}</Text>
-                    <Text style={styles.vehicleNumber}>{vehicle.vehicle_number}</Text>
+                    <View>
+                      <Text style={styles.vehicleName}>{vehicle.vehicle_name}</Text>
+                      <Text style={styles.vehicleNumber}>{vehicle.vehicle_number}</Text>
+                      {vehicle.model && <Text style={styles.vehicleModel}>{vehicle.model} • {vehicle.year || 'N/A'}</Text>}
+                    </View>
+
+                    {/* Vehicle Metrics Row */}
+                    <View style={styles.vehicleMetrics}>
+                      {/* Fuel Level */}
+                      <View style={styles.fuelBadge}>
+                        <Text style={styles.fuelBadgeText}>⛽ {vehicle.fuel_level || 0}%</Text>
+                      </View>
+
+                      {/* Mileage */}
+                      <View style={styles.metricBadge}>
+                        <Text style={styles.metricBadgeText}>📊 {(vehicle.mileage || 0).toLocaleString()} km</Text>
+                      </View>
+
+                      {/* Protocol Status (ACTIVE/IDLE) */}
+                      <View style={[
+                        styles.metricBadge,
+                        { backgroundColor: vehicle.protocol_status === 'ACTIVE' ? 'rgba(109, 254, 156, 0.1)' : 'rgba(255, 193, 7, 0.1)' }
+                      ]}>
+                        <Text style={[
+                          styles.metricBadgeText,
+                          { color: vehicle.protocol_status === 'ACTIVE' ? '#6dfe9c' : '#ffc107' }
+                        ]}>
+                          {vehicle.protocol_status === 'IDLE' ? '⏸️' : '▶️'} {vehicle.protocol_status || 'UNKNOWN'}
+                        </Text>
+                      </View>
+
+                      {/* Safety Rating */}
+                      {vehicle.safety_rating && (
+                        <View style={[
+                          styles.metricBadge,
+                          { backgroundColor: vehicle.safety_rating > 85 ? 'rgba(109, 254, 156, 0.1)' : 'rgba(255, 138, 76, 0.1)' }
+                        ]}>
+                          <Text style={[
+                            styles.metricBadgeText,
+                            { color: vehicle.safety_rating > 85 ? '#6dfe9c' : '#ff8a4c' }
+                          ]}>
+                            ⭐ {vehicle.safety_rating}%
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Location */}
+                      {vehicle.location?.coordinates && (
+                        <View style={styles.metricBadge}>
+                          <Text style={styles.metricBadgeText}>📍 {vehicle.location.coordinates[1].toFixed(2)}, {vehicle.location.coordinates[0].toFixed(2)}</Text>
+                        </View>
+                      )}
+
+                      {/* Assigned Driver */}
+                      {vehicle.assigned_driver?.firstName && (
+                        <View style={[styles.metricBadge, { backgroundColor: 'rgba(163, 166, 255, 0.15)' }]}>
+                          <Text style={[styles.metricBadgeText, { color: '#a3a6ff' }]}>👤 {vehicle.assigned_driver.firstName}</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
 
                   <View style={styles.statusBadge}>

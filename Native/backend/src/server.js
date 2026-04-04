@@ -32,7 +32,8 @@ app.use(cors({
     const allowedPorts = ['8081', '3000', '5173', '19000'];
     const isLocal = origin.includes('localhost') || 
                     origin.includes('127.0.0.1') || 
-                    origin.includes('192.168.');
+                    origin.includes('192.168.') ||
+                    origin.includes('10.'); // Allow network IPs (10.x.x.x range)
     
     if (isLocal || process.env.NODE_ENV === 'development') {
       callback(null, true);

@@ -111,19 +111,53 @@ const VehicleSelection = () => {
                   </div>
                   
                   <h2 className="text-3xl font-bold text-white mb-2 group-hover:text-blue-400 transition-colors">
-                    {vehicle.vehicle_name || vehicle.number || 'Standard Bus'}
+                    {vehicle.year || 'N/A'}
                   </h2>
-                  <p className="text-gray-400 mb-6 text-lg">{vehicle.model || 'Route A-102'}</p>
+                  <p className="text-gray-400 mb-6 text-lg">{vehicle.model || 'N/A'}</p>
                   
                   <div className="grid grid-cols-2 gap-4 border-t border-gray-700/50 pt-6">
                     <div className="flex flex-col">
                       <span className="text-gray-500 text-xs uppercase font-bold tracking-tighter">Mileage</span>
-                      <span className="text-white font-medium">{vehicle.mileage || '42k'} km</span>
+                      <span className="text-white font-medium">{vehicle.mileage !== undefined ? vehicle.mileage : 'N/A'} km</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-gray-500 text-xs uppercase font-bold tracking-tighter">Fuel</span>
-                      <span className="text-green-400 font-medium">{vehicle.fuel_level || '85'}%</span>
+                      <span className="text-green-400 font-medium">{vehicle.fuel_level !== undefined ? vehicle.fuel_level : 'N/A'}%</span>
                     </div>
+                    <div className="flex flex-col">
+                      <span className="text-gray-500 text-xs uppercase font-bold tracking-tighter">Safety Rating</span>
+                      <span className="text-yellow-400 font-medium">{vehicle.safety_rating !== undefined ? vehicle.safety_rating : 'N/A'}/100</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-gray-500 text-xs uppercase font-bold tracking-tighter">Status</span>
+                      <span className="text-blue-400 font-medium capitalize">{vehicle.protocol_status || 'N/A'}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-gray-500 text-xs uppercase font-bold tracking-tighter">Latitude</span>
+                      <span className="text-white font-medium text-sm">{vehicle.location?.coordinates?.[1]?.toFixed(4) || (vehicle.location?.coordinates?.[1] === 0 ? '0.0000' : 'N/A')}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-gray-500 text-xs uppercase font-bold tracking-tighter">Longitude</span>
+                      <span className="text-white font-medium text-sm">{vehicle.location?.coordinates?.[0]?.toFixed(4) || (vehicle.location?.coordinates?.[0] === 0 ? '0.0000' : 'N/A')}</span>
+                    </div>
+                    {vehicle.vin && (
+                      <div className="flex flex-col">
+                        <span className="text-gray-500 text-xs uppercase font-bold tracking-tighter">VIN</span>
+                        <span className="text-white font-medium text-sm truncate">{vehicle.vin}</span>
+                      </div>
+                    )}
+                    {vehicle.vehicle_number && (
+                      <div className="flex flex-col">
+                        <span className="text-gray-500 text-xs uppercase font-bold tracking-tighter">Bus Number</span>
+                        <span className="text-white font-medium">{vehicle.vehicle_number}</span>
+                      </div>
+                    )}
+                    {vehicle.maintenance_due && (
+                      <div className="flex flex-col">
+                        <span className="text-gray-500 text-xs uppercase font-bold tracking-tighter">Maintenance Due</span>
+                        <span className="text-red-400 font-medium text-sm">{new Date(vehicle.maintenance_due).toLocaleDateString()}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -22,9 +22,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 
 import useAuthStore from '../../store/authStore';
-import apiClient from '../../services/api';
+import apiClient, { driversAPI } from '../../services/api';
 import { convertImageToBase64, getBase64Size } from '../../utils/imageUtils';
 import { useDriverAnalytics } from '../../hooks/useDriverAnalytics';
+import { useSessionTelemetry } from '../../hooks/useSessionTelemetry';
+import { useDynamicSafety } from '../../hooks/useDynamicSafety';
 import { Theme } from '@/constants/styles';
 
 /**
@@ -50,9 +52,15 @@ function DriverCardItem({
   ownerId,
 }: DriverCardItemProps) {
   const { analytics, isLoading: analyticsLoading } = useDriverAnalytics(driver._id, ownerId);
+  const { telemetry, isActive: telemetryActive } = useSessionTelemetry();
+  const { safety } = useDynamicSafety();
 
   const isExpanded = expandedId === driver._id;
   const DriverStatusColor = driver.isActive ? Theme.colors.success : Theme.colors.error;
+
+  // Calculate safety score: Use dynamic safety if available, fallback to analytics
+  const displayedSafetyScore = safety?.safetyScore !== undefined ? safety.safetyScore : (analytics?.averageSafetyScore || 100);
+  const alertCount = safety?.alertsCount || analytics?.totalAlerts || 0;
 
   // Format duty hours for display
   const dutyHoursDisplay = analytics
@@ -61,11 +69,15 @@ function DriverCardItem({
       : '00:00h'
     : '--:--h';
 
-  // Get performance rating (1-5 stars converted to display)
-  const ratingDisplay = analytics?.performanceRating ? analytics.performanceRating.toFixed(1) : '-.--';
+  // Get performance rating (1-5 stars converted to display) - with proper null/undefined check
+  const ratingDisplay = analytics && typeof analytics.performanceRating === 'number' && analytics.performanceRating !== undefined
+    ? analytics.performanceRating.toFixed(1)
+    : '-.--';
 
   // Calculate perfect performance percentage
-  const perfectPerfDisplay = analytics?.perfectPerformancePercentage || 0;
+  const perfectPerfDisplay = (analytics?.perfectPerformancePercentage !== undefined && analytics?.perfectPerformancePercentage !== null)
+    ? analytics.perfectPerformancePercentage
+    : 0;
 
   // Get recent performance bars (last 7 sessions)
   const recentSessions = analytics?.recentPerformance?.slice(0, 7) || [];
@@ -171,21 +183,109 @@ function DriverCardItem({
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>TOTAL_ALERTS</Text>
-                    <Text style={[styles.detailValue, { color: analytics.totalAlerts > 0 ? Theme.colors.error : Theme.colors.success }]}>
-                      {analytics.totalAlerts}
+                    <Text style={[styles.detailValue, { color: alertCount > 0 ? Theme.colors.error : Theme.colors.success }]}>
+                      {alertCount}
                     </Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>SAFETY_SCORE</Text>
-                    <Text style={[styles.detailValue, { color: analytics.averageSafetyScore > 80 ? Theme.colors.success : Theme.colors.accent }]}>
-                      {analytics.averageSafetyScore}%
+                    <Text style={[
+                      styles.detailValue,
+                      {
+                        color: displayedSafetyScore >= 75 ? Theme.colors.success :
+                               displayedSafetyScore >= 50 ? Theme.colors.accent :
+                               Theme.colors.error
+                      }
+                    ]}>
+                      {displayedSafetyScore.toFixed(1)}%
                     </Text>
                   </View>
+
+                  {/* Alert Breakdown (when alerts exist) */}
+                  {safety && safety.alertsCount > 0 && (
+                    <View style={styles.alertBreakdownRow}>
+                      <Text style={styles.detailLabel}>ALERT_BREAKDOWN</Text>
+                      <View style={styles.alertBadgesRow}>
+                        {safety.highSeverityAlerts > 0 && (
+                          <View style={[styles.alertBadge, { backgroundColor: 'rgba(255, 87, 87, 0.15)' }]}>
+                            <Text style={{ fontSize: 8, color: '#ff5757', fontWeight: '700' }}>
+                              🔴 High: {safety.highSeverityAlerts}
+                            </Text>
+                          </View>
+                        )}
+                        {safety.mediumSeverityAlerts > 0 && (
+                          <View style={[styles.alertBadge, { backgroundColor: 'rgba(255, 193, 7, 0.15)' }]}>
+                            <Text style={{ fontSize: 8, color: '#ffc107', fontWeight: '700' }}>
+                              🟡 Medium: {safety.mediumSeverityAlerts}
+                            </Text>
+                          </View>
+                        )}
+                        {safety.lowSeverityAlerts > 0 && (
+                          <View style={[styles.alertBadge, { backgroundColor: 'rgba(76, 175, 80, 0.15)' }]}>
+                            <Text style={{ fontSize: 8, color: '#4caf50', fontWeight: '700' }}>
+                              🟢 Low: {safety.lowSeverityAlerts}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>TOTAL_SESSIONS</Text>
-                    <Text style={styles.detailValue}>{analytics.totalSessions}</Text>
+                    <Text style={styles.detailValue}>{analytics?.totalSessions || 0}</Text>
                   </View>
                 </View>
+
+                {/* Real-time Session Telemetry Section */}
+                {telemetryActive && telemetry && (
+                  <View style={styles.telemetrySection}>
+                    <Text style={styles.sectionLabel}>⚡ LIVE_SESSION_TELEMETRY</Text>
+                    <View style={styles.telemetryGrid}>
+                      <View style={styles.telemetryCard}>
+                        <Text style={styles.telemetryLabel}>Distance</Text>
+                        <Text style={styles.telemetryValue}>{(telemetry.distance || 0).toFixed(1)}</Text>
+                        <Text style={styles.telemetryUnit}>km</Text>
+                      </View>
+                      <View style={styles.telemetryCard}>
+                        <Text style={styles.telemetryLabel}>Duration</Text>
+                        <Text style={styles.telemetryValue}>
+                          {Math.floor((telemetry.duration || 0) / 60)}:{String((telemetry.duration || 0) % 60).padStart(2, '0')}
+                        </Text>
+                        <Text style={styles.telemetryUnit}>min</Text>
+                      </View>
+                      <View style={styles.telemetryCard}>
+                        <Text style={styles.telemetryLabel}>Max Accel</Text>
+                        <Text style={styles.telemetryValue}>{(telemetry.maxAcceleration || 0).toFixed(2)}</Text>
+                        <Text style={styles.telemetryUnit}>m/s²</Text>
+                      </View>
+                      <View style={styles.telemetryCard}>
+                        <Text style={styles.telemetryLabel}>Avg Speed</Text>
+                        <Text style={styles.telemetryValue}>{(telemetry.avgSpeed || 0).toFixed(1)}</Text>
+                        <Text style={styles.telemetryUnit}>km/h</Text>
+                      </View>
+                      <View style={styles.telemetryCard}>
+                        <Text style={styles.telemetryLabel}>Max Speed</Text>
+                        <Text style={styles.telemetryValue}>{(telemetry.maxSpeed || 0).toFixed(1)}</Text>
+                        <Text style={styles.telemetryUnit}>km/h</Text>
+                      </View>
+                      <View style={styles.telemetryCard}>
+                        <Text style={styles.telemetryLabel}>Max Braking</Text>
+                        <Text style={styles.telemetryValue}>{(telemetry.maxBraking || 0).toFixed(2)}</Text>
+                        <Text style={styles.telemetryUnit}>m/s²</Text>
+                      </View>
+                      <View style={[styles.telemetryCard, { gridColumn: 'span 2' }]}>
+                        <Text style={styles.telemetryLabel}>Safety %</Text>
+                        <Text style={[styles.telemetryValue, { 
+                          color: (telemetry.safetyPercentage || 0) > 80 ? Theme.colors.success : 
+                                  (telemetry.safetyPercentage || 0) > 60 ? Theme.colors.accent : Theme.colors.error 
+                        }]}>
+                          {(telemetry.safetyPercentage || 0).toFixed(1)}%
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
 
                 <View style={styles.actionRow}>
                   <Pressable
@@ -512,6 +612,60 @@ const styles = StyleSheet.create({
     fontFamily: Theme.fonts.technical,
     color: Theme.colors.text,
   },
+  alertBreakdownRow: {
+    gap: 4,
+    paddingVertical: 4,
+  },
+  alertBadgesRow: {
+    flexDirection: 'row',
+    gap: 4,
+    flexWrap: 'wrap',
+  },
+  alertBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: Theme.roundness.sm,
+    borderWidth: 0.5,
+  },
+  telemetrySection: {
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Theme.colors.outlineVariant,
+  },
+  telemetryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  telemetryCard: {
+    flex: 1,
+    minWidth: '48%',
+    backgroundColor: Theme.colors.surfaceContainerHigh,
+    borderRadius: Theme.roundness.md,
+    padding: 8,
+    alignItems: 'center',
+    borderLeftWidth: 2,
+    borderLeftColor: Theme.colors.accent,
+  },
+  telemetryLabel: {
+    fontSize: 8,
+    fontFamily: Theme.fonts.label,
+    color: Theme.colors.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  telemetryValue: {
+    fontSize: 14,
+    fontFamily: Theme.fonts.technical,
+    color: Theme.colors.text,
+    fontWeight: '600',
+  },
+  telemetryUnit: {
+    fontSize: 7,
+    fontFamily: Theme.fonts.label,
+    color: Theme.colors.textSecondary,
+  },
   actionRow: {
     flexDirection: 'row',
     gap: 8,
@@ -747,13 +901,14 @@ export default function DriversScreen() {
         Alert.alert('Error', 'User not authenticated');
         return;
       }
-      const response = await apiClient.get('/api/drivers', { params: { ownerId } });
-      if (response.data.success) {
-        setDrivers(response.data.data || []);
-        setFilteredDrivers(response.data.data || []);
-      }
+      // Use protected API route that automatically filters by authenticated owner
+      console.log('📱 Fetching drivers for authenticated owner:', ownerId);
+      const drivers = await driversAPI.getOwnDrivers();
+      setDrivers(drivers || []);
+      setFilteredDrivers(drivers || []);
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to fetch drivers');
+      console.error('❌ Error fetching drivers:', error);
+      Alert.alert('Error', error.message || 'Failed to fetch drivers');
     } finally {
       setIsLoading(false);
     }

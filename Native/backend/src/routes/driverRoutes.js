@@ -13,20 +13,24 @@ import {
 const router = express.Router();
 
 // ============================================
+// PUBLIC ROUTES (No authentication required)
+// ============================================
+
+// GET all drivers from database (NO AUTH REQUIRED - for web app)
+// GET /api/drivers/public/all
+router.get('/public/all', getAllDrivers);
+
+// ============================================
 // NATIVE APP ROUTES (Owner-based, auth required)
 // ============================================
 
-// GET drivers for logged-in owner ONLY
+// GET drivers for logged-in owner ONLY (REQUIRES AUTH - for native app)
 // GET /api/drivers/owner/me
 router.get('/owner/me', verifyAuth, getOwnerDrivers);
 
 // ============================================
-// AUTHENTICATED ROUTES (All require auth for owner verification)
+// AUTHENTICATED ROUTES (All other routes require auth)
 // ============================================
-
-// GET all drivers for authenticated owner
-// GET /api/drivers?ownerId=xxx (requires authentication)
-router.get('/', verifyAuth, getAllDrivers);
 
 // GET driver analytics by ID
 // GET /api/drivers/:id/analytics (requires authentication)

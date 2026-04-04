@@ -1,17 +1,56 @@
 import apiClient from './api';
 
+/**
+ * Comprehensive Vehicle Interface
+ * Matches backend comprehensive vehicle data structure with all fields
+ */
 export interface Vehicle {
+  // ===== IDENTIFICATION =====
   _id?: string;
-  vehicle_number: string;
-  vehicle_name: string;
-  status?: string;
-  safety_rating?: number;
-  last_active?: string;
-  protocol_status?: string;
-  recent_performance?: number[];
-  in_transit?: boolean;
-  created_at?: string;
-  updated_at?: string;
+  vehicle_number: string;           // e.g., "BUS-1234-01"
+  vehicle_name: string;             // e.g., "Metro Transit Pulsar"
+  vin?: string;                     // Vehicle Identification Number
+
+  // ===== MODEL & YEAR =====
+  model?: string;                   // e.g., "Volvo 9400 B11R"
+  year?: number;                    // e.g., 2023
+
+  // ===== STATUS FIELDS =====
+  status?: string;                  // available, in-use, maintenance, inactive
+  protocol_status?: string;         // ACTIVE, IDLE, IN_TRANSIT, DIAGNOSTIC, OFFLINE
+  in_transit?: boolean;             // Whether vehicle is currently moving
+
+  // ===== METRICS (Gauge Display) =====
+  safety_rating?: number;           // Safety percentage (0-100)
+  fuel_level?: number;              // Fuel/Battery percentage (0-100)
+
+  // ===== MILEAGE & LOCATION =====
+  mileage?: number;                 // Distance in km
+  location?: {
+    type?: string;
+    coordinates?: [number, number]; // [longitude, latitude]
+  };
+
+  // ===== DRIVER ASSIGNMENT =====
+  assigned_driver?: string | null;  // Driver ObjectId or name, null = Unassigned
+  assigned_driver_name?: string;    // Populated driver name from backend
+
+  // ===== MAINTENANCE =====
+  maintenance_due?: string | Date;  // When next maintenance is due
+
+  // ===== PERFORMANCE TRACKING =====
+  recent_performance?: number[];    // 7-day performance metrics
+
+  // ===== DESCRIPTIVE FIELDS =====
+  notes?: string;                   // Vehicle condition/status notes
+
+  // ===== METADATA =====
+  last_active?: string | Date;      // Last active timestamp
+  created_at?: string | Date;       // Creation timestamp
+  updated_at?: string | Date;       // Last update timestamp
+
+  // ===== OWNER REFERENCE =====
+  ownerId?: string;                 // Fleet owner ID
 }
 
 export interface VehicleListResponse {
@@ -26,23 +65,22 @@ export interface VehicleListResponse {
  */
 export const vehicleAPI = {
   /**
-   * GET /api/vehicles
-   * Fetch all vehicles for authenticated owner
+   * GET /api/vehicles/native/available
+   * Fetch available vehicles for authenticated owner (NATIVE APP - REQUIRES TOKEN)
    */
   getVehicles: async (ownerId?: string): Promise<Vehicle[]> => {
     try {
-      console.log('Fetching vehicles for owner...', ownerId ? `ownerId: ${ownerId}` : 'ownerId from auth header');
-      const response = await apiClient.get<VehicleListResponse>('/api/vehicles', {
-        params: ownerId ? { ownerId } : {}
-      });
+      console.log('📱 Native App: Fetching available vehicles for authenticated owner');
+      // Use protected native app endpoint that automatically filters by authenticated owner
+      const response = await apiClient.get<VehicleListResponse>('/api/vehicles/native/available');
       
-      if (response.data.success && response.data.data) {
-        console.log('Vehicles fetched successfully:', response.data.data.length, 'vehicles');
+      if (response.data.data) {
+        console.log('✅ Available vehicles fetched successfully:', response.data.data.length, 'vehicles');
         return response.data.data;
       }
       throw new Error(response.data.message || 'Failed to fetch vehicles');
     } catch (error: any) {
-      console.error('Error fetching vehicles:', error.message);
+      console.error('❌ Error fetching vehicles:', error.message);
       throw {
         message: error.response?.data?.message || error.message || 'Failed to fetch vehicles',
         status: error.response?.status

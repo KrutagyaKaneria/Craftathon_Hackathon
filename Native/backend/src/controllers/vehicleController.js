@@ -1,6 +1,7 @@
 import { Vehicle } from '../models/Vehicle.js';
 import { Owner } from '../models/Owner.js';
 import { io } from '../utils/socketHandler.js';
+import { generateRandomVehicleData } from '../utils/vehicleGenerator.js';
 
 /**
  * Vehicle Controller
@@ -13,11 +14,16 @@ import { io } from '../utils/socketHandler.js';
  */
 export const getAllVehicles = async (req, res) => {
   try {
-    // Get ownerId from authenticated token or query parameter
+    // Check if this is a public request (no auth) or authenticated request
+    const isAuthenticated = !!req.ownerId;
+    const isPublicRoute = req.path === '/public/available' || req.baseUrl?.includes('/public/available');
+
     let ownerId = req.ownerId; // From JWT token (verifyAuth middleware)
+    
+    // If query parameter provided
     if (req.query.ownerId) {
-      // If query parameter provided, verify it matches the authenticated owner
-      if (req.ownerId && req.query.ownerId !== req.ownerId) {
+      // If authenticated, verify it matches the token owner
+      if (isAuthenticated && req.ownerId && req.query.ownerId !== req.ownerId) {
         console.error(`❌ Owner mismatch - Token owner: ${req.ownerId}, Query owner: ${req.query.ownerId}`);
         return res.status(403).json({
           success: false,
@@ -27,7 +33,17 @@ export const getAllVehicles = async (req, res) => {
       ownerId = req.query.ownerId;
     }
 
-    if (!ownerId) {
+    // Public route requires ownerId in query parameter
+    if (isPublicRoute && !ownerId) {
+      console.error('❌ Public vehicles route: ownerId query parameter required');
+      return res.status(400).json({
+        success: false,
+        message: 'ownerId parameter is required for public access',
+      });
+    }
+
+    // Protected route requires authentication or ownerId
+    if (!isPublicRoute && !ownerId) {
       console.error('❌ Vehicles: No ownerId found in request');
       return res.status(401).json({
         success: false,
@@ -35,7 +51,7 @@ export const getAllVehicles = async (req, res) => {
       });
     }
 
-    console.log('🚗 Getting all vehicles - ownerId:', ownerId);
+    console.log(`${isPublicRoute ? '🌐 PUBLIC' : '🔐 AUTHENTICATED'} request - Getting vehicles for ownerId:`, ownerId);
 
     // Query filters from request
     const { status, protocol_status, in_transit, search } = req.query;
@@ -167,18 +183,45 @@ export const createVehicle = async (req, res) => {
       });
     }
 
-    const { vehicle_number, vehicle_name, model, year, vin, assigned_driver } = req.body;
+    // Check if generating random vehicle data
+    const { generateRandom } = req.body;
+    let vehicleData;
 
-    // Validate required fields
-    if (!vehicle_number || !vehicle_name) {
-      return res.status(400).json({
-        success: false,
-        message: 'vehicle_number and vehicle_name are required',
-      });
+    if (generateRandom) {
+      // Get next vehicle index for this owner
+      const vehicleCount = await Vehicle.countDocuments({ ownerId });
+      console.log('🎲 Generating random vehicle data...');
+      vehicleData = generateRandomVehicleData(ownerId, vehicleCount + 1);
+    } else {
+      // Use provided data
+      const { vehicle_number, vehicle_name, model, year, vin, assigned_driver } = req.body;
+
+      // Validate required fields
+      if (!vehicle_number || !vehicle_name) {
+        return res.status(400).json({
+          success: false,
+          message: 'vehicle_number and vehicle_name are required (or set generateRandom: true)',
+        });
+      }
+
+      vehicleData = {
+        vehicle_number,
+        vehicle_name,
+        model,
+        year,
+        vin,
+        assigned_driver,
+        status: 'active',
+        protocol_status: 'ACTIVE',
+        fuel_level: 75,
+        mileage: 0,
+        safety_rating: 85,
+        last_active: new Date(),
+      };
     }
 
     // Check if vehicle number already exists for this owner
-    const existingVehicle = await Vehicle.findOne({ ownerId, vehicle_number });
+    const existingVehicle = await Vehicle.findOne({ ownerId, vehicle_number: vehicleData.vehicle_number });
     if (existingVehicle) {
       return res.status(409).json({
         success: false,
@@ -189,19 +232,14 @@ export const createVehicle = async (req, res) => {
     // Create new vehicle
     const newVehicle = new Vehicle({
       ownerId,
-      vehicle_number,
-      vehicle_name,
-      model,
-      year,
-      vin,
-      assigned_driver,
-      status: 'active',
-      protocol_status: 'ACTIVE',
-      last_active: new Date(),
+      ...vehicleData,
     });
 
     const savedVehicle = await newVehicle.save();
     console.log('✅ Vehicle created:', savedVehicle._id);
+    if (generateRandom) {
+      console.log(`   📊 Generated data: ${vehicleData.vehicle_name} | ${vehicleData.model} | Fuel: ${vehicleData.fuel_level}% | Mileage: ${vehicleData.mileage}km`);
+    }
 
     // Increment owner's totalVehicles count
     await Owner.findByIdAndUpdate(ownerId, { $inc: { totalVehicles: 1 } });
