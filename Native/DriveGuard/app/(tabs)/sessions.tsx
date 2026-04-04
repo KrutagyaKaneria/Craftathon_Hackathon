@@ -560,7 +560,7 @@ export default function SessionsScreen() {
 
   if (!isAuthenticated || !token) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.emptyContainer}>
           <FontAwesome6 name="lock" size={48} color="#00d9ff" />
           <Text style={styles.emptyText}>Authentication required</Text>
@@ -571,7 +571,7 @@ export default function SessionsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#a3a6ff" />
         </View>
@@ -580,7 +580,7 @@ export default function SessionsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor="#070d1f" />
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -605,17 +605,45 @@ export default function SessionsScreen() {
 
           <Text style={styles.newsBadge}>SURVEILLANCE NEWS</Text>
 
-          {/* Title */}
+          {/* Title with Total Count */}
           <View style={styles.titleRow}>
             <Text style={styles.mainTitle}>Monitoring Sessions</Text>
+            <View style={{
+              backgroundColor: 'rgba(163, 166, 255, 0.2)',
+              borderWidth: 1,
+              borderColor: '#a3a6ff',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 8,
+            }}>
+              <Text style={{
+                fontSize: 12,
+                fontWeight: '700',
+                color: '#a3a6ff',
+                letterSpacing: 0.5,
+              }}>
+                {sessions.length} TOTAL
+              </Text>
+            </View>
           </View>
 
-          {/* Active Units */}
+          {/* Active Units with Count */}
           <View style={styles.activeUnitsRow}>
             <View style={styles.activeAvatars}>
               {activeSessions.slice(0, 3).map((session, index) => (
                 <View key={index} style={styles.avatar}>
-                  <FontAwesome6 name="user" size={14} color="#070d1f" />
+                  {session.driverPhoto ? (
+                    <Image
+                      source={{ uri: session.driverPhoto }}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                      }}
+                    />
+                  ) : (
+                    <FontAwesome6 name="user" size={14} color="#070d1f" />
+                  )}
                 </View>
               ))}
               {activeSessions.length > 3 && (
@@ -773,24 +801,45 @@ export default function SessionsScreen() {
                     </Text>
                   </View>
 
-                  {/* Metrics Row */}
-                  {(statusType === 'critical' || statusType === 'warning') && (
-                    <View style={styles.metricsRow}>
-                      {session.heartRate && (
-                        <View style={styles.metricBox}>
-                          <Text style={styles.metricLabel}>Heart Rate</Text>
-                          <Text style={styles.metricValue}>{session.heartRate}</Text>
-                          <Text style={styles.metricUnit}>BPM</Text>
-                        </View>
-                      )}
-                      {session.eyeTracking && (
-                        <View style={styles.metricBox}>
-                          <Text style={styles.metricLabel}>Eye Tracking</Text>
-                          <Text style={styles.metricValue}>{session.eyeTracking}</Text>
-                        </View>
-                      )}
+                  {/* Metrics Row - Distance, Time, Acceleration */}
+                  <View style={styles.metricsRow}>
+                    <View style={styles.metricBox}>
+                      <Text style={styles.metricLabel}>Distance</Text>
+                      <Text style={styles.metricValue}>{(session.distanceCovered || 0).toFixed(1)}</Text>
+                      <Text style={styles.metricUnit}>KM</Text>
                     </View>
-                  )}
+                    <View style={styles.metricBox}>
+                      <Text style={styles.metricLabel}>Duration</Text>
+                      <Text style={styles.metricValue}>
+                        {Math.floor((session.duration || 0) / 60)}h {(session.duration || 0) % 60}m
+                      </Text>
+                      <Text style={styles.metricUnit}>TIME</Text>
+                    </View>
+                    <View style={styles.metricBox}>
+                      <Text style={styles.metricLabel}>Max Accel</Text>
+                      <Text style={styles.metricValue}>{(session.maxAcceleration || 0).toFixed(2)}</Text>
+                      <Text style={styles.metricUnit}>m/s²</Text>
+                    </View>
+                  </View>
+
+                  {/* Additional Metrics Row */}
+                  <View style={styles.metricsRow}>
+                    <View style={styles.metricBox}>
+                      <Text style={styles.metricLabel}>Avg Speed</Text>
+                      <Text style={styles.metricValue}>{(session.avgSpeed || 0).toFixed(0)}</Text>
+                      <Text style={styles.metricUnit}>km/h</Text>
+                    </View>
+                    <View style={styles.metricBox}>
+                      <Text style={styles.metricLabel}>Max Speed</Text>
+                      <Text style={styles.metricValue}>{(session.maxSpeed || 0).toFixed(0)}</Text>
+                      <Text style={styles.metricUnit}>km/h</Text>
+                    </View>
+                    <View style={styles.metricBox}>
+                      <Text style={styles.metricLabel}>Max Braking</Text>
+                      <Text style={styles.metricValue}>{(session.maxDeceleration || 0).toFixed(2)}</Text>
+                      <Text style={styles.metricUnit}>m/s²</Text>
+                    </View>
+                  </View>
 
                   {/* Last Break */}
                   {session.lastBreak && (
@@ -824,14 +873,81 @@ export default function SessionsScreen() {
                   {isExpanded && (
                     <View style={styles.expandedContent}>
                       <Text style={styles.timelineLabel}>Session Details</Text>
+                      
+                      {/* Vehicle Info */}
                       <View style={styles.metricBox}>
                         <Text style={styles.metricLabel}>Vehicle Model</Text>
-                        <Text style={styles.metricValue}>{session.vehicleModel}</Text>
+                        <Text style={styles.metricValue}>{session.vehicleModel || 'Unknown'}</Text>
                       </View>
+
+                      {/* Detailed Timeline */}
                       <View style={styles.metricBox}>
-                        <Text style={styles.metricLabel}>Distance Covered</Text>
+                        <Text style={styles.metricLabel}>Start Time</Text>
                         <Text style={styles.metricValue}>
-                          {Math.floor(Math.random() * 150)}.{Math.floor(Math.random() * 100)} km
+                          {new Date(session.startTime).toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          })}
+                        </Text>
+                      </View>
+
+                      {session.endTime && (
+                        <View style={styles.metricBox}>
+                          <Text style={styles.metricLabel}>End Time</Text>
+                          <Text style={styles.metricValue}>
+                            {new Date(session.endTime).toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                            })}
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Safety Score Details */}
+                      <View style={[styles.metricBox, { marginTop: 8 }]}>
+                        <Text style={styles.metricLabel}>Global Safety Index</Text>
+                        <View style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                          marginTop: 4,
+                        }}>
+                          <Text style={styles.metricValue}>{session.safetyScore || 100}%</Text>
+                          <View style={{
+                            flex: 1,
+                            height: 6,
+                            backgroundColor: 'rgba(65, 71, 91, 0.3)',
+                            borderRadius: 3,
+                            overflow: 'hidden',
+                          }}>
+                            <View style={{
+                              width: `${session.safetyScore || 100}%`,
+                              height: '100%',
+                              backgroundColor: session.safetyScore >= 90 ? '#6dfe9c' : session.safetyScore >= 70 ? '#ffd700' : '#ff6e84',
+                              borderRadius: 3,
+                            }} />
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Alerts Summary */}
+                      <View style={styles.metricBox}>
+                        <Text style={styles.metricLabel}>Alerts Triggered</Text>
+                        <Text style={styles.metricValue}>{session.alertsCount || 0}</Text>
+                      </View>
+
+                      {/* Status */}
+                      <View style={styles.metricBox}>
+                        <Text style={styles.metricLabel}>Session Status</Text>
+                        <Text style={[
+                          styles.metricValue,
+                          {
+                            color: session.status === 'active' ? '#3adffa' : '#a5aac2',
+                          }
+                        ]}>
+                          {session.status === 'active' ? '🔴 ACTIVE' : '⏹️ ENDED'}
                         </Text>
                       </View>
                     </View>

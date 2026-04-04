@@ -8,11 +8,11 @@ import {
   TouchableOpacity,
   Alert,
   Dimensions,
+  SafeAreaView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { FontAwesome6 } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -154,7 +154,7 @@ export default function DashboardScreen() {
         {/* Safety HUD: Glassmorphism */}
         {dashboard && (
           <View style={styles.hudContainer}>
-            <BlurView intensity={25} tint="dark" style={styles.glassCard}>
+            <View style={styles.glassCard}>
               <View style={styles.hudHeader}>
                 <ThemedText style={styles.hudTitle}>OVERALL SAFETY SCORE</ThemedText>
                 <View style={styles.hudBadge}>
@@ -180,7 +180,7 @@ export default function DashboardScreen() {
                   <ThemedText style={styles.miniValue}>ALPHA-1</ThemedText>
                 </View>
               </View>
-            </BlurView>
+            </View>
           </View>
         )}
 

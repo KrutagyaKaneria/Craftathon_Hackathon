@@ -8,6 +8,7 @@ import {
   Alert,
   StyleSheet,
   Text,
+  SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
@@ -63,8 +64,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.contentContainer}>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
         {/* Header Section */}
         <View style={styles.headerSection}>
           <View style={styles.shieldIcon}>
@@ -207,8 +208,8 @@ export default function LoginScreen() {
           </View>
           <Text style={styles.versionText}>V4.2.0-SENTINEL</Text>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -218,8 +219,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F1419',
   },
   contentContainer: {
+    flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 40,
+    paddingTop: 20,
     paddingBottom: 40,
   },
   headerSection: {

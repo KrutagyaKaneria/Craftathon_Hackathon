@@ -14,10 +14,11 @@ const router = express.Router();
 
 /**
  * Vehicle Routes
+ * All routes require authentication for owner-based multi-tenant access control
  */
 
-// All vehicle routes require authentication (Disabled for web-app compatibility)
-// router.use(verifyAuth);
+// All vehicle routes require authentication
+router.use(verifyAuth);
 
 // Get all vehicles (with optional filters)
 // GET /api/vehicles?status=active&protocol_status=ACTIVE&search=DG-001

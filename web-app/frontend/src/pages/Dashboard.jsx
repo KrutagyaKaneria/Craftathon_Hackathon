@@ -4,7 +4,9 @@ import useAppStore from '../store/appStore.js';
 import { useCamera } from '../hooks/useCamera.js';
 import useSocket from '../hooks/useSocket.js';
 import aiService from '../services/aiService.js';
+import apiService from '../services/api.js';
 import { utils } from '../utils/utils.js';
+import { telemetryService } from '../services/telemetryService.js';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -51,6 +53,9 @@ const Dashboard = () => {
     onFatigueUpdate: (fatigue) => {
       setFatigueDebug(fatigue);
       setRequestError('');
+      
+      // Send fatigue data via telemetry service
+      telemetryService.sendFatigueAlert(driverId, sessionId, fatigue);
     },
     onFatigueError: (error) => {
       setRequestError(error.message || 'Fatigue request failed');
@@ -98,6 +103,17 @@ const Dashboard = () => {
             seconds: nextSeconds % 60,
           };
         });
+
+        // Send sensor telemetry every 3 seconds
+        if (nextSeconds % 3 === 0) {
+          const state = useAppStore.getState();
+          telemetryService.sendSensorData(driverId, sessionId, {
+            acceleration: state.acceleration,
+            brake: state.brake,
+            steering: state.steering,
+            speed: virtualSpeedRef.current,
+          });
+        }
       }, 1000);
     }
     return () => clearInterval(interval);
@@ -192,6 +208,15 @@ const Dashboard = () => {
             severity: result.rash_driving.severity || 'medium',
             message: `Rash: ${String(result.rash_driving.event).replace('_', ' ')}`,
           });
+          
+          // Send rash driving alert via telemetry service
+          telemetryService.sendRashDrivingAlert(driverId, sessionId, {
+            event: result.rash_driving.event,
+            acceleration: state.acceleration,
+            brake: state.brake,
+            steering: state.steering,
+            confidence: result.rash_driving.confidence,
+          });
         }
       } catch (error) {
         console.error('Rash detection error:', error);
@@ -221,11 +246,31 @@ const Dashboard = () => {
     }
   };
 
-  const handleEndSession = () => {
-    stopFatigueDetection();
-    stopCamera();
-    reset();
-    navigate('/');
+  const handleEndSession = async () => {
+    try {
+      stopFatigueDetection();
+      stopCamera();
+      
+      // End the session and release the vehicle
+      if (session?._id || session?.id) {
+        await apiService.updateSession(session._id || session.id, {
+          status: 'ended',
+          safetyScore: session?.safetyScore || 100,
+          alertsCount: alerts.length,
+        });
+        console.log('✅ Session ended and vehicle released');
+      }
+      
+      reset();
+      navigate('/');
+    } catch (error) {
+      console.error('❌ Error ending session:', error);
+      addAlert({
+        type: 'error',
+        severity: 'high',
+        message: 'Failed to end session. Please try again.',
+      });
+    }
   };
 
   if (!verifiedDriver || !selectedVehicle || !session) return null;

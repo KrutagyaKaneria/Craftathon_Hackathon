@@ -1,5 +1,7 @@
 import { Driver } from '../models/Driver.js';
 import { Owner } from '../models/Owner.js';
+import { Session } from '../models/Session.js';
+import { Alert } from '../models/Alert.js';
 
 /**
  * Driver Controller
@@ -8,23 +10,47 @@ import { Owner } from '../models/Owner.js';
 
 export const getAllDrivers = async (req, res) => {
   try {
-    console.log('👤 Fetching ALL drivers from database (global load)');
+    // Get ownerId from authenticated token or query parameter
+    let ownerId = req.ownerId; // From JWT token (verifyAuth middleware)
+    if (req.query.ownerId) {
+      // If query parameter provided, use it but verify it matches the authenticated owner
+      // This prevents a user from requesting another user's drivers
+      if (req.ownerId && req.query.ownerId !== req.ownerId) {
+        console.error(`❌ Owner mismatch - Token owner: ${req.ownerId}, Query owner: ${req.query.ownerId}`);
+        return res.status(403).json({
+          success: false,
+          message: 'Unauthorized: Cannot access other owners data',
+        });
+      }
+      ownerId = req.query.ownerId;
+    }
 
-    // Fetch ALL drivers from database for the global selection screen
-    const drivers = await Driver.find({})
+    if (!ownerId) {
+      console.error('❌ No owner ID found in token or query parameters');
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required - owner ID not found',
+      });
+    }
+
+    console.log('👤 Fetching drivers for owner:', ownerId);
+
+    // Fetch ONLY drivers belonging to the authenticated owner
+    const drivers = await Driver.find({ ownerId })
       .select('-password')
       .sort({ createdAt: -1 })
       .lean();
 
-    console.log(`✅ Loaded ${drivers.length} drivers globally`);
+    console.log(`✅ Loaded ${drivers.length} drivers for owner ${ownerId}`);
     drivers.forEach((driver, index) => {
-      console.log(`  [${index + 1}] ${driver.firstName} (Owner: ${driver.ownerId}): profilePhoto ${driver.profilePhoto ? '✓ ' + (driver.profilePhoto.length / 1024 / 1024).toFixed(2) + 'MB' : '✗'}`);
+      console.log(`  [${index + 1}] ${driver.firstName} ${driver.lastName || ''} (${driver.email}): profilePhoto ${driver.profilePhoto ? '✓ ' + (driver.profilePhoto.length / 1024 / 1024).toFixed(2) + 'MB' : '✗'}`);
     });
 
     return res.status(200).json({
       success: true,
       data: drivers,
-      count: drivers.length
+      count: drivers.length,
+      ownerId: ownerId
     });
   } catch (error) {
     console.error('❌ Get all drivers error:', error);
@@ -84,8 +110,15 @@ export const getOwnerDrivers = async (req, res) => {
 export const getDriverById = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.ownerId || req.body.ownerId || req.query.ownerId || '69cfd750239cb96c7844acb5';
+    const ownerId = req.ownerId || req.query.ownerId;
     console.log('👤 Getting driver:', id);
+
+    if (!ownerId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required - no owner ID found',
+      });
+    }
 
     const driver = await Driver.findById(id)
       .select('-password')
@@ -98,8 +131,12 @@ export const getDriverById = async (req, res) => {
       });
     }
 
-    // Verify driver belongs to this owner
-    if (driver.ownerId.toString() !== ownerId) {
+    // Verify driver belongs to this owner with proper string comparison
+    const driverOwnerIdStr = driver.ownerId.toString();
+    const requestOwnerIdStr = typeof ownerId === 'object' ? ownerId.toString() : ownerId;
+    
+    if (driverOwnerIdStr !== requestOwnerIdStr) {
+      console.error(`❌ Owner mismatch for driver ${id} - Driver owner: ${driverOwnerIdStr}, Request owner: ${requestOwnerIdStr}`);
       return res.status(403).json({
         success: false,
         message: 'Unauthorized access to this driver',
@@ -229,14 +266,14 @@ export const createDriver = async (req, res) => {
 export const updateDriver = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.ownerId || req.body.ownerId || '69cfd750239cb96c7844acb5';
+    const ownerId = req.ownerId || req.query.ownerId;
 
     console.log('📝 Updating driver:', id);
 
     if (!ownerId) {
       return res.status(401).json({
         success: false,
-        message: 'Owner ID is required',
+        message: 'Authentication required - no owner ID found',
       });
     }
 
@@ -249,7 +286,11 @@ export const updateDriver = async (req, res) => {
       });
     }
 
-    if (driver.ownerId.toString() !== ownerId) {
+    const driverOwnerIdStr = driver.ownerId.toString();
+    const requestOwnerIdStr = typeof ownerId === 'object' ? ownerId.toString() : ownerId;
+    
+    if (driverOwnerIdStr !== requestOwnerIdStr) {
+      console.error(`❌ Owner mismatch for driver ${id} - Driver owner: ${driverOwnerIdStr}, Request owner: ${requestOwnerIdStr}`);
       return res.status(403).json({
         success: false,
         message: 'Unauthorized access to this driver',
@@ -287,14 +328,14 @@ export const updateDriver = async (req, res) => {
 export const deleteDriver = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.ownerId || req.body.ownerId || req.query.ownerId || '69cfd750239cb96c7844acb5';
+    const ownerId = req.ownerId || req.query.ownerId;
 
     console.log('🗑️ Deleting driver:', id);
 
     if (!ownerId) {
       return res.status(401).json({
         success: false,
-        message: 'Owner ID is required',
+        message: 'Authentication required - no owner ID found',
       });
     }
 
@@ -307,7 +348,11 @@ export const deleteDriver = async (req, res) => {
       });
     }
 
-    if (driver.ownerId.toString() !== ownerId) {
+    const driverOwnerIdStr = driver.ownerId.toString();
+    const requestOwnerIdStr = typeof ownerId === 'object' ? ownerId.toString() : ownerId;
+    
+    if (driverOwnerIdStr !== requestOwnerIdStr) {
+      console.error(`❌ Owner mismatch for driver ${id} - Driver owner: ${driverOwnerIdStr}, Request owner: ${requestOwnerIdStr}`);
       return res.status(403).json({
         success: false,
         message: 'Unauthorized access to this driver',
@@ -336,9 +381,189 @@ export const deleteDriver = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/drivers/:id/analytics
+ * Fetch driver analytics aggregated from all their sessions
+ * Returns: safety score, duty hours, alerts, performance rating, etc.
+ */
+export const getDriverAnalytics = async (req, res) => {
+  try {
+    const { id: driverId } = req.params;
+    // Prioritize req.ownerId from authenticated token, then check query params
+    const ownerId = req.ownerId || req.query.ownerId;
+    
+    console.log('📊 Fetching analytics for driver:', driverId);
+    console.log('🔐 Owner ID from token:', req.ownerId);
+    console.log('🔐 Owner ID from query:', req.query.ownerId);
+    console.log('🔐 Final Owner ID being used:', ownerId);
+
+    // Verify owner ID is provided
+    if (!ownerId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required - no owner ID found',
+      });
+    }
+
+    // Verify driver exists and belongs to owner
+    const driver = await Driver.findById(driverId).select('-password');
+    if (!driver) {
+      return res.status(404).json({
+        success: false,
+        message: 'Driver not found',
+      });
+    }
+
+    // Ensure proper string comparison for ObjectId comparison
+    const driverOwnerIdStr = driver.ownerId.toString();
+    const requestOwnerIdStr = typeof ownerId === 'object' ? ownerId.toString() : ownerId;
+    
+    console.log('✔️ Driver Owner ID:', driverOwnerIdStr);
+    console.log('✔️ Request Owner ID:', requestOwnerIdStr);
+
+    if (driverOwnerIdStr !== requestOwnerIdStr) {
+      console.error(`❌ Owner mismatch - Driver owner: ${driverOwnerIdStr}, Request owner: ${requestOwnerIdStr}`);
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access to this driver',
+      });
+    }
+
+    // Fetch all sessions for this driver
+    const sessions = await Session.find({ driverId }).sort({ startTime: -1 }).lean();
+
+    if (sessions.length === 0) {
+      console.log('ℹ️ No sessions found for driver:', driverId);
+      return res.status(200).json({
+        success: true,
+        data: {
+          driverId,
+          driverName: `${driver.firstName} ${driver.lastName}`,
+          totalSessions: 0,
+          averageSafetyScore: 100,
+          totalDutyHours: 0,
+          totalDutyMinutes: 0,
+          totalDistanceCovered: 0,
+          totalAlerts: 0,
+          perfectPerformanceSessions: 0,
+          performanceRating: 5.0,
+          recentPerformance: [],
+          safetyTrend: [],
+          lastSessionDate: null,
+        }
+      });
+    }
+
+    // Calculate analytics
+    let totalSafetyScore = 0;
+    let totalDutyMinutes = 0;
+    let totalAlerts = 0;
+    let totalDistance = 0;
+    let perfectPerformanceSessions = 0;
+    const recentPerformance = [];
+    const safetyTrend = [];
+
+    // Get last 7 days for trend
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    sessions.forEach((session) => {
+      // Aggregate safety scores
+      totalSafetyScore += session.safetyScore || 100;
+
+      // Calculate duty time
+      if (session.startTime && session.endTime) {
+        const duration = (new Date(session.endTime) - new Date(session.startTime)) / (1000 * 60); // convert to minutes
+        totalDutyMinutes += duration;
+      } else if (session.duration) {
+        totalDutyMinutes += session.duration;
+      }
+
+      // Count alerts
+      totalAlerts += session.alertsCount || 0;
+
+      // Sum distance
+      totalDistance += session.distanceCovered || 0;
+
+      // Perfect performance: 0 alerts AND safety score > 90
+      if ((session.alertsCount === 0 || !session.alertsCount) && (session.safetyScore || 100) > 90) {
+        perfectPerformanceSessions += 1;
+      }
+
+      // Store recent performance data (last 10 sessions)
+      if (recentPerformance.length < 10) {
+        recentPerformance.push({
+          date: session.startTime,
+          safetyScore: session.safetyScore || 100,
+          alerts: session.alertsCount || 0,
+          duration: session.duration,
+          distance: session.distanceCovered || 0,
+          status: session.status,
+        });
+      }
+
+      // Safety trend for last 7 days
+      if (new Date(session.startTime) >= sevenDaysAgo) {
+        safetyTrend.push({
+          date: session.startTime,
+          score: session.safetyScore || 100,
+        });
+      }
+    });
+
+    // Calculate averages
+    const averageSafetyScore = Math.round(totalSafetyScore / sessions.length);
+    const totalDutyHours = (totalDutyMinutes / 60).toFixed(2);
+    const perfectPerformancePercentage = Math.round((perfectPerformanceSessions / sessions.length) * 100);
+
+    // Calculate performance rating (0-5.0 stars)
+    // Based on: safety score (70%), perfect performance (20%), low alerts (10%)
+    const safetyComponent = (averageSafetyScore / 100) * 3.5; // max 3.5 stars
+    const perfectionComponent = (perfectPerformancePercentage / 100) * 1.0; // max 1.0 star
+    const alertComponent = Math.max(0, 0.5 - (Math.min(totalAlerts, 50) / 100)); // max 0.5 star
+    const performanceRating = Math.min(5.0, safetyComponent + perfectionComponent + alertComponent).toFixed(1);
+
+    console.log(`✅ Analytics calculated for driver ${driverId}:`);
+    console.log(`   Sessions: ${sessions.length}`);
+    console.log(`   Avg Safety Score: ${averageSafetyScore}%`);
+    console.log(`   Total Duty: ${totalDutyHours}h`);
+    console.log(`   Total Alerts: ${totalAlerts}`);
+    console.log(`   Perfect Performance: ${perfectPerformancePercentage}%`);
+    console.log(`   Rating: ${performanceRating}/5.0`);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        driverId,
+        driverName: `${driver.firstName} ${driver.lastName}`,
+        totalSessions: sessions.length,
+        averageSafetyScore,
+        totalDutyHours: parseFloat(totalDutyHours),
+        totalDutyMinutes,
+        totalDistanceCovered: Math.round(totalDistance),
+        totalAlerts,
+        perfectPerformanceSessions,
+        perfectPerformancePercentage,
+        performanceRating: parseFloat(performanceRating),
+        recentPerformance,
+        safetyTrend,
+        lastSessionDate: sessions[0]?.startTime || null,
+      }
+    });
+  } catch (error) {
+    console.error('❌ Get driver analytics error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch driver analytics',
+      error: error.message,
+    });
+  }
+};
+
 export default {
   getAllDrivers,
   getDriverById,
+  getDriverAnalytics,
   createDriver,
   updateDriver,
   deleteDriver,

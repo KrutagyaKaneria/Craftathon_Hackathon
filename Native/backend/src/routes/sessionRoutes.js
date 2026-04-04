@@ -7,12 +7,13 @@ import {
   updateSession,
   deleteSession,
   getActiveSessions,
+  updateSessionTelemetry,
 } from '../controllers/sessionController.js';
 
 const router = express.Router();
 
-// All session routes require authentication (disabled for web-app demo)
-// router.use(verifyAuth);
+// All session routes require authentication for owner-based multi-tenant access control
+router.use(verifyAuth);
 
 // GET all sessions
 router.get('/', getAllSessions);
@@ -28,6 +29,9 @@ router.post('/', createSession);
 
 // PUT update session
 router.put('/:id', updateSession);
+
+// PUT update session telemetry data (distance, acceleration, etc)
+router.put('/:id/telemetry', updateSessionTelemetry);
 
 // DELETE session
 router.delete('/:id', deleteSession);

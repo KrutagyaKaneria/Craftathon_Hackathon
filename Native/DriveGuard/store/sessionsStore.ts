@@ -5,12 +5,21 @@ export interface Session {
   driverId: string;
   driverName: string;
   driverPhoto?: string;
+  vehicleId?: string;
   vehicleNumber: string;
   vehicleModel: string;
   status: 'active' | 'ended';
   startTime: string;
   endTime?: string;
   duration: number; // in minutes
+  
+  // Telemetry & Performance Metrics
+  distanceCovered?: number; // in km
+  maxAcceleration?: number; // in m/s²
+  maxDeceleration?: number; // in m/s²
+  avgSpeed?: number; // in km/h
+  maxSpeed?: number; // in km/h
+  
   safetyScore: number; // 0-100
   alertsCount: number;
   heartRate?: number;
@@ -21,6 +30,14 @@ export interface Session {
     level?: number; // 1-5
     severity?: 'low' | 'medium' | 'high';
   };
+  telemetrySnapshots?: Array<{
+    timestamp: string;
+    distance: number;
+    speed: number;
+    acceleration: number;
+    brake: number;
+    steering: number;
+  }>;
   createdAt: string;
   updatedAt: string;
 }

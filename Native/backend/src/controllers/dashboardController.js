@@ -6,6 +6,7 @@
 import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../models/Driver.js';
 import { Owner } from '../models/Owner.js';
+import { Session } from '../models/Session.js';
 
 const getDashboardData = async (req, res) => {
   try {
@@ -28,6 +29,18 @@ const getDashboardData = async (req, res) => {
     const activeVehicles = await Vehicle.countDocuments({ ownerId, status: 'active' });
     const totalDrivers = await Driver.countDocuments({ ownerId });
     const activeDrivers = await Driver.countDocuments({ ownerId, isOnDuty: true });
+
+    // Fetch sessions data
+    const activeSessions = await Session.find({ ownerId, status: 'active' })
+      .sort({ startTime: -1 })
+      .select('_id driverId driverName vehicleId vehicleNumber status startTime safetyScore alertsCount')
+      .lean();
+    
+    const allSessions = await Session.find({ ownerId })
+      .sort({ startTime: -1 })
+      .limit(10)
+      .select('_id driverId driverName vehicleId vehicleNumber status startTime endTime safetyScore alertsCount duration')
+      .lean();
 
     // Get safety rating from all vehicles of this owner
     const vehiclesData = await Vehicle.find({ ownerId }).select('safety_rating fuel_level status').lean();
@@ -79,6 +92,7 @@ const getDashboardData = async (req, res) => {
       totalDrivers,
       totalVehicles,
       activeDrivers,
+      activeSessions: activeSessions.length,
       safetyRating: avgSafetyRating,
       fleetReadiness,
       fuelEfficiency: avgFuelLevel,
@@ -92,6 +106,10 @@ const getDashboardData = async (req, res) => {
           timestamp: new Date().toISOString(),
         }
       ],
+      sessions: {
+        active: activeSessions,
+        recent: allSessions,
+      },
     };
 
     console.log('📊 Dashboard Data:', dashboardData);

@@ -52,6 +52,41 @@ const SessionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Distance and telemetry metrics
+    distanceCovered: {
+      type: Number,
+      default: 0, // in kilometers
+    },
+    maxAcceleration: {
+      type: Number,
+      default: 0, // in m/s²
+    },
+    maxDeceleration: {
+      type: Number,
+      default: 0, // in m/s²
+    },
+    avgSpeed: {
+      type: Number,
+      default: 0, // in km/h
+    },
+    maxSpeed: {
+      type: Number,
+      default: 0, // in km/h
+    },
+    // Telemetry array for real-time updates
+    telemetrySnapshots: {
+      type: [
+        {
+          timestamp: Date,
+          distance: Number,
+          speed: Number,
+          acceleration: Number,
+          brake: Number,
+          steering: Number,
+        },
+      ],
+      default: [],
+    },
     safetyScore: {
       type: Number,
       min: 0,

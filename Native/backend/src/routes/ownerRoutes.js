@@ -9,23 +9,23 @@ import {
 const router = express.Router();
 
 // ============================================
-// WEBCAM SCREEN ROUTES (All data, no auth)
+// PUBLIC ROUTES (for general info only - NO sensitive data)
 // ============================================
 
-// GET all owners from database (for webcam to show all owner buses)
-// GET /api/owners/all
+// GET all owner names and counts (no drivers/vehicles data)
+// GET /api/owners/all (PUBLIC - safe)
 router.get('/all', getAllOwners);
 
-// GET owner by ID with associated drivers and vehicles
+// ============================================
+// AUTHENTICATED ROUTES (Auth required for detailed owner data)
+// ============================================
+
+// GET owner by ID with drivers and vehicles (requires authentication)
 // GET /api/owners/:id
-router.get('/:id', getOwnerById);
+router.get('/:id', verifyAuth, getOwnerById);
 
-// ============================================
-// NATIVE APP ROUTES (Auth required)
-// ============================================
-
-// GET logged-in owner profile
-// GET /api/owners/me
+// GET logged-in owner profile (requires authentication)
+// GET /api/owners/profile/me
 router.get('/profile/me', verifyAuth, getOwnerProfile);
 
 export default router;

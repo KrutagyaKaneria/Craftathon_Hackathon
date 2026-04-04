@@ -1,4 +1,4 @@
-from deepface import DeepFace
+import face_recognition
 import cv2
 import numpy as np
 import base64
@@ -6,7 +6,7 @@ from app.utils import decode_image_base64, logger
 
 def verify_face(stored_image_base64: str, captured_image_base64: str) -> dict:
     """
-    Compares two face images using DeepFace.
+    Compares two face images using face_recognition.
     Returns a dictionary with 'verified' (bool) and 'distance' / 'threshold'.
     """
     try:
@@ -19,15 +19,29 @@ def verify_face(stored_image_base64: str, captured_image_base64: str) -> dict:
         if img2 is None:
             return {"verified": False, "message": "Invalid captured image"}
 
-        # DeepFace verification using VGG-Face (default)
-        # Note: Model loading might take a while on first run
-        result = DeepFace.verify(
-            img1_path=img1, 
-            img2_path=img2, 
-            enforce_detection=True, 
-            detector_backend='opencv', # opencv is fast, retinaface is more robust
-            model_name='VGG-Face'
-        )
+        # Convert BGR to RGB for face_recognition
+        img1_rgb = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
+        img2_rgb = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
+        
+        # Get face encodings
+        face1_encodings = face_recognition.face_encodings(img1_rgb)
+        face2_encodings = face_recognition.face_encodings(img2_rgb)
+        
+        if not face1_encodings:
+            return {"verified": False, "message": "No face detected in stored image"}
+        if not face2_encodings:
+            return {"verified": False, "message": "No face detected in captured image"}
+        
+        # Compare faces using face_recognition
+        distance = face_recognition.face_distance([face1_encodings[0]], face2_encodings[0])[0]
+        threshold = 0.6  # face_recognition default
+        verified = distance < threshold
+        
+        result = {
+            "verified": bool(verified),
+            "distance": float(distance),
+            "threshold": threshold
+        }
 
         logger.info(f"Face verification result: {result['verified']} (distance: {result['distance']:.4f})")
         

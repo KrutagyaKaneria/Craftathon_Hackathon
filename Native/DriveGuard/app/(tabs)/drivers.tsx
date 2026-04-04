@@ -15,6 +15,7 @@ import {
   Image,
   FlatList,
 } from 'react-native';
+
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,7 +24,206 @@ import { useRouter } from 'expo-router';
 import useAuthStore from '../../store/authStore';
 import apiClient from '../../services/api';
 import { convertImageToBase64, getBase64Size } from '../../utils/imageUtils';
+import { useDriverAnalytics } from '../../hooks/useDriverAnalytics';
 import { Theme } from '@/constants/styles';
+
+/**
+ * Driver Card Component - displays driver info with real analytics
+ */
+interface DriverCardItemProps {
+  driver: any;
+  expandedId: string | null;
+  onExpand: (id: string) => void;
+  onEdit: (driver: any) => void;
+  onDelete: (driver: any) => void;
+  onAssignVehicle: (driverId: string, driverName: string) => void;
+  ownerId: string;
+}
+
+function DriverCardItem({
+  driver,
+  expandedId,
+  onExpand,
+  onEdit,
+  onDelete,
+  onAssignVehicle,
+  ownerId,
+}: DriverCardItemProps) {
+  const { analytics, isLoading: analyticsLoading } = useDriverAnalytics(driver._id, ownerId);
+
+  const isExpanded = expandedId === driver._id;
+  const DriverStatusColor = driver.isActive ? Theme.colors.success : Theme.colors.error;
+
+  // Format duty hours for display
+  const dutyHoursDisplay = analytics
+    ? analytics.totalDutyHours > 0
+      ? `${Math.floor(analytics.totalDutyHours)}:${String(Math.round((analytics.totalDutyHours % 1) * 60)).padStart(2, '0')}h`
+      : '00:00h'
+    : '--:--h';
+
+  // Get performance rating (1-5 stars converted to display)
+  const ratingDisplay = analytics?.performanceRating ? analytics.performanceRating.toFixed(1) : '-.--';
+
+  // Calculate perfect performance percentage
+  const perfectPerfDisplay = analytics?.perfectPerformancePercentage || 0;
+
+  // Get recent performance bars (last 7 sessions)
+  const recentSessions = analytics?.recentPerformance?.slice(0, 7) || [];
+
+  return (
+    <Pressable
+      key={driver._id}
+      style={styles.driverCard}
+      onPress={() => onExpand(driver._id)}
+    >
+      <View style={[styles.driverCardGhostBorder, { backgroundColor: DriverStatusColor }]} />
+      <View style={styles.driverCardContent}>
+        
+        <View style={styles.driverHeader}>
+          {driver.profilePhoto ? (
+            <Image source={{ uri: driver.profilePhoto }} style={styles.driverProfileImage} />
+          ) : (
+            <View style={styles.driverProfileImage}>
+              <FontAwesome6 name="user" size={20} color={Theme.colors.textSecondary} />
+            </View>
+          )}
+          
+          <View style={styles.driverMainInfo}>
+            <Text style={styles.driverName}>{driver.firstName} {driver.lastName}</Text>
+            <Text style={styles.driverRole}>{driver.email}</Text>
+          </View>
+          
+          <View style={styles.statusIndicatorContainer}>
+            <View style={[styles.statusIndicator, { backgroundColor: DriverStatusColor }]} />
+          </View>
+        </View>
+
+        <View style={styles.ratingDurationRow}>
+          <View style={styles.ratingBadge}>
+            <FontAwesome6 name="star" size={10} color={Theme.colors.textSecondary} />
+            <Text style={styles.ratingText}>{ratingDisplay} / 5.0</Text>
+          </View>
+          <View style={styles.durationBadge}>
+            <FontAwesome6 name="clock" size={10} color={Theme.colors.accent} />
+            <Text style={styles.durationText}>{dutyHoursDisplay}</Text>
+          </View>
+        </View>
+
+        <View style={styles.driverMetrics}>
+          <View style={styles.metricBadge}>
+            <FontAwesome6 name="phone" size={10} color={Theme.colors.textMuted} />
+            <Text style={styles.metricText}>{driver.phone || 'NO_CONTACT'}</Text>
+          </View>
+          <View style={styles.statusBadge}>
+            <FontAwesome6 name="circle" size={6} color={DriverStatusColor} />
+            <Text style={[styles.statusText, { color: DriverStatusColor }]}>
+              {driver.isActive ? 'NORMAL_PROTOCOL' : 'CAUTION_FLAG'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Expand Trigger */}
+        <View style={styles.expandButton}>
+          <FontAwesome6 name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={Theme.colors.textMuted} />
+        </View>
+
+        {/* Expanded Tactical Content */}
+        {isExpanded && (
+          <View style={styles.expandedContent}>
+            {analyticsLoading ? (
+              <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                <ActivityIndicator size="small" color={Theme.colors.accent} />
+                <Text style={[styles.sectionLabel, { marginTop: 8 }]}>LOADING_ANALYTICS...</Text>
+              </View>
+            ) : analytics ? (
+              <>
+                <View style={styles.performanceSection}>
+                  <Text style={styles.sectionLabel}>RECENT_PERFORMANCE</Text>
+                  <View style={styles.performanceChart}>
+                    {recentSessions.length > 0 ? (
+                      recentSessions.map((session, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.performanceBar,
+                            {
+                              height: `${Math.max(30, (session.safetyScore || 100) / 100 * 80)}%`,
+                              backgroundColor:
+                                (session.safetyScore || 100) > 90
+                                  ? Theme.colors.success
+                                  : (session.safetyScore || 100) > 70
+                                  ? Theme.colors.accent
+                                  : Theme.colors.error,
+                            },
+                          ]}
+                        />
+                      ))
+                    ) : (
+                      <Text style={styles.metricText}>NO_SESSION_DATA</Text>
+                    )}
+                  </View>
+                </View>
+
+                <View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>PERFECT_PERFORMANCE</Text>
+                    <Text style={styles.detailValue}>{perfectPerfDisplay}%</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>TOTAL_ALERTS</Text>
+                    <Text style={[styles.detailValue, { color: analytics.totalAlerts > 0 ? Theme.colors.error : Theme.colors.success }]}>
+                      {analytics.totalAlerts}
+                    </Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>SAFETY_SCORE</Text>
+                    <Text style={[styles.detailValue, { color: analytics.averageSafetyScore > 80 ? Theme.colors.success : Theme.colors.accent }]}>
+                      {analytics.averageSafetyScore}%
+                    </Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>TOTAL_SESSIONS</Text>
+                    <Text style={styles.detailValue}>{analytics.totalSessions}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.actionRow}>
+                  <Pressable
+                    style={[styles.actionButton, styles.actionButtonEdit]}
+                    onPress={() => onEdit(driver)}
+                  >
+                    <FontAwesome6 name="pen" size={10} color={Theme.colors.textSecondary} />
+                    <Text style={[styles.actionButtonText, { color: Theme.colors.textSecondary }]}>EDIT</Text>
+                  </Pressable>
+                  
+                  <Pressable
+                    style={[styles.actionButton, styles.actionButtonAssign]}
+                    onPress={() => onAssignVehicle(driver._id, `${driver.firstName} ${driver.lastName}`)}
+                  >
+                    <FontAwesome6 name="car" size={10} color={Theme.colors.accent} />
+                    <Text style={[styles.actionButtonText, { color: Theme.colors.accent }]}>ASSIGN</Text>
+                  </Pressable>
+                  
+                  <Pressable
+                    style={[styles.actionButton, styles.actionButtonDelete]}
+                    onPress={() => onDelete(driver)}
+                  >
+                    <FontAwesome6 name="trash" size={10} color={Theme.colors.error} />
+                    <Text style={[styles.actionButtonText, { color: Theme.colors.error }]}>DELETE</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <Text style={[styles.detailLabel, { textAlign: 'center', paddingVertical: 16 }]}>
+                No analytics available
+              </Text>
+            )}
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -717,7 +917,7 @@ export default function DriversScreen() {
 
   if (!isAuthenticated || !token) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.centerContent}>
           <FontAwesome6 name="lock" size={48} color={Theme.colors.accent} />
           <Text style={styles.emptyText}>Authentication required</Text>
@@ -727,7 +927,7 @@ export default function DriversScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor={Theme.colors.background} />
 
       <ScrollView
@@ -813,127 +1013,20 @@ export default function DriversScreen() {
           </View>
         ) : (
           <View style={styles.driversList}>
-            {filteredDrivers.map((driver, index) => {
-              const DriverStatusColor = driver.isActive ? Theme.colors.success : Theme.colors.error;
-
-              return (
-                <Pressable
-                  key={driver._id}
-                  style={styles.driverCard}
-                  onPress={() => setExpandedId(expandedId === driver._id ? null : driver._id)}
-                >
-                  <View style={[styles.driverCardGhostBorder, { backgroundColor: DriverStatusColor }]} />
-                  <View style={styles.driverCardContent}>
-                    
-                    <View style={styles.driverHeader}>
-                      {driver.profilePhoto ? (
-                        <Image source={{ uri: driver.profilePhoto }} style={styles.driverProfileImage} />
-                      ) : (
-                        <View style={styles.driverProfileImage}>
-                          <FontAwesome6 name="user" size={20} color={Theme.colors.textSecondary} />
-                        </View>
-                      )}
-                      
-                      <View style={styles.driverMainInfo}>
-                        <Text style={styles.driverName}>{driver.firstName} {driver.lastName}</Text>
-                        <Text style={styles.driverRole}>{driver.email}</Text>
-                      </View>
-                      
-                      <View style={styles.statusIndicatorContainer}>
-                        <View style={[styles.statusIndicator, { backgroundColor: DriverStatusColor }]} />
-                      </View>
-                    </View>
-
-                    <View style={styles.ratingDurationRow}>
-                      <View style={styles.ratingBadge}>
-                        <FontAwesome6 name="star" size={10} color={Theme.colors.textSecondary} />
-                        <Text style={styles.ratingText}>4.{Math.floor(Math.random() * 10)} / 5.0</Text>
-                      </View>
-                      <View style={styles.durationBadge}>
-                        <FontAwesome6 name="clock" size={10} color={Theme.colors.accent} />
-                        <Text style={styles.durationText}>
-                          {String(Math.floor(Math.random() * 12)).padStart(2, '0')}:{String(Math.floor(Math.random() * 60)).padStart(2, '0')}h
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.driverMetrics}>
-                      <View style={styles.metricBadge}>
-                        <FontAwesome6 name="phone" size={10} color={Theme.colors.textMuted} />
-                        <Text style={styles.metricText}>{driver.phone || 'NO_CONTACT'}</Text>
-                      </View>
-                      <View style={styles.statusBadge}>
-                        <FontAwesome6 name="circle" size={6} color={DriverStatusColor} />
-                        <Text style={[styles.statusText, { color: DriverStatusColor }]}>
-                          {driver.isActive ? 'NORMAL_PROTOCOL' : 'CAUTION_FLAG'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Expand Trigger */}
-                    <View style={styles.expandButton}>
-                      <FontAwesome6 name={expandedId === driver._id ? 'chevron-up' : 'chevron-down'} size={14} color={Theme.colors.textMuted} />
-                    </View>
-
-                    {/* Expanded Tactical Content */}
-                    {expandedId === driver._id && (
-                      <View style={styles.expandedContent}>
-                        <View style={styles.performanceSection}>
-                          <Text style={styles.sectionLabel}>RECENT_PERFORMANCE</Text>
-                          <View style={styles.performanceChart}>
-                            {[...Array(7)].map((_, i) => (
-                              <View
-                                key={i}
-                                style={[styles.performanceBar, { height: `${40 + Math.random() * 60}%` }]}
-                              />
-                            ))}
-                          </View>
-                        </View>
-
-                        <View>
-                          <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>DUTY_LIMIT</Text>
-                            <Text style={styles.detailValue}>{70 + Math.floor(Math.random() * 30)}%</Text>
-                          </View>
-                          <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>BRAKE_HEALTH</Text>
-                            <Text style={[styles.detailValue, { color: driver.isActive ? Theme.colors.success : Theme.colors.error }]}>
-                              {driver.isActive ? 'OPTIMUM' : 'ALERT'}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.actionRow}>
-                          <Pressable
-                            style={[styles.actionButton, styles.actionButtonEdit]}
-                            onPress={() => handleEditDriver(driver)}
-                          >
-                            <FontAwesome6 name="pen" size={10} color={Theme.colors.textSecondary} />
-                            <Text style={[styles.actionButtonText, { color: Theme.colors.textSecondary }]}>EDIT</Text>
-                          </Pressable>
-                          
-                          <Pressable
-                            style={[styles.actionButton, styles.actionButtonAssign]}
-                            onPress={() => router.push({ pathname: '/assign-vehicle', params: { driverId: driver._id, driverName: `${driver.firstName} ${driver.lastName}` } })}
-                          >
-                            <FontAwesome6 name="car" size={10} color={Theme.colors.accent} />
-                            <Text style={[styles.actionButtonText, { color: Theme.colors.accent }]}>ASSIGN</Text>
-                          </Pressable>
-                          
-                          <Pressable
-                            style={[styles.actionButton, styles.actionButtonDelete]}
-                            onPress={() => handleDeleteDriver(driver)}
-                          >
-                            <FontAwesome6 name="trash" size={10} color={Theme.colors.error} />
-                            <Text style={[styles.actionButtonText, { color: Theme.colors.error }]}>DELETE</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                </Pressable>
-              );
-            })}
+            {filteredDrivers.map((driver, index) => (
+              <DriverCardItem
+                key={driver._id}
+                driver={driver}
+                expandedId={expandedId}
+                onExpand={(id) => setExpandedId(expandedId === id ? null : id)}
+                onEdit={handleEditDriver}
+                onDelete={handleDeleteDriver}
+                onAssignVehicle={(driverId, driverName) =>
+                  router.push({ pathname: '/assign-vehicle', params: { driverId, driverName } })
+                }
+                ownerId={ownerId}
+              />
+            ))}
           </View>
         )}
 

@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Driver Safety ML Backend"
     VERSION: str = "1.0.0"
     DEBUG: bool = False
+    ENVIRONMENT: str = "development"
 
     # DB Config
     MONGODB_URI: str = "mongodb://localhost:27017/driver_safety"

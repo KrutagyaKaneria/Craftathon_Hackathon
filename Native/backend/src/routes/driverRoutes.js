@@ -4,6 +4,7 @@ import {
   getAllDrivers,
   getDriverById,
   getOwnerDrivers,
+  getDriverAnalytics,
   createDriver,
   updateDriver,
   deleteDriver,
@@ -20,28 +21,32 @@ const router = express.Router();
 router.get('/owner/me', verifyAuth, getOwnerDrivers);
 
 // ============================================
-// WEBCAM SCREEN ROUTES (All data, no auth)
+// AUTHENTICATED ROUTES (All require auth for owner verification)
 // ============================================
 
-// GET all drivers from database (for webcam global selection)
-// GET /api/drivers
-router.get('/', getAllDrivers);
+// GET all drivers for authenticated owner
+// GET /api/drivers?ownerId=xxx (requires authentication)
+router.get('/', verifyAuth, getAllDrivers);
 
-// GET driver by ID with owner details (for webcam selected driver)
-// GET /api/drivers/:id
-router.get('/:id', getDriverById);
+// GET driver analytics by ID
+// GET /api/drivers/:id/analytics (requires authentication)
+router.get('/:id/analytics', verifyAuth, getDriverAnalytics);
+
+// GET driver by ID with owner verification
+// GET /api/drivers/:id (requires authentication)
+router.get('/:id', verifyAuth, getDriverById);
 
 // ============================================
-// CREATE/UPDATE/DELETE (can be auth or both)
+// CREATE/UPDATE/DELETE (all require authentication)
 // ============================================
 
 // POST create new driver
-router.post('/', createDriver);
+router.post('/', verifyAuth, createDriver);
 
 // PUT update driver
-router.put('/:id', updateDriver);
+router.put('/:id', verifyAuth, updateDriver);
 
 // DELETE driver
-router.delete('/:id', deleteDriver);
+router.delete('/:id', verifyAuth, deleteDriver);
 
 export default router;

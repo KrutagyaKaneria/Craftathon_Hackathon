@@ -22,8 +22,9 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuthStore } from '@/store/authStore';
 import { socketService } from '@/services/socketService';
+import useAlertsStore from '@/store/alertsStore';
 import { useAlerts } from '@/hooks/useAlerts';
-import { AlertModal } from '@/components/AlertModal';
+import { NotificationBanner } from '@/components/NotificationBanner';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -60,7 +61,12 @@ export default function RootLayout() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const token = useAuthStore((state) => state.token);
 
-  const { currentAlert, clearAlert } = useAlerts();
+  const currentNotification = useAlertsStore((state) => state.currentNotification);
+  const dismissNotification = useAlertsStore((state) => state.dismissNotification);
+  const deleteNotificationPermanently = useAlertsStore((state) => state.deleteNotificationPermanently);
+
+  // Initialize alerts hook to listen for socket events
+  useAlerts();
 
   // Initialize auth only once
   useEffect(() => {
@@ -148,13 +154,15 @@ export default function RootLayout() {
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />
-      <AlertModal 
-        isVisible={!!currentAlert} 
-        alert={currentAlert} 
-        onClose={clearAlert} 
-        onAcknowledge={() => {
-          console.log('👍 Alert acknowledged');
-          // Add any specific acknowledgement logic here if needed
+      <NotificationBanner
+        notification={currentNotification}
+        onDismiss={() => {
+          if (currentNotification) {
+            dismissNotification(currentNotification._id);
+          }
+        }}
+        onDelete={(notificationId) => {
+          deleteNotificationPermanently(notificationId);
         }}
       />
     </ThemeProvider>

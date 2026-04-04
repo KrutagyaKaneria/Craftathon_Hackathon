@@ -129,4 +129,32 @@ export const authAPI = {
   },
 };
 
+// Sessions telemetry API calls
+export const sessionsAPI = {
+  updateTelemetry: async (sessionId: string, telemetryData: {
+    distance?: number;
+    maxAcceleration?: number;
+    maxDeceleration?: number;
+    avgSpeed?: number;
+    maxSpeed?: number;
+    telemetrySnapshot?: {
+      distance: number;
+      speed: number;
+      acceleration: number;
+      brake: number;
+      steering: number;
+    };
+  }) => {
+    try {
+      const response = await apiClient.put(`/api/sessions/${sessionId}/telemetry`, telemetryData);
+      return response.data;
+    } catch (error: any) {
+      throw {
+        message: error.response?.data?.message || 'Failed to update telemetry',
+        status: error.response?.status
+      };
+    }
+  },
+};
+
 export default apiClient;

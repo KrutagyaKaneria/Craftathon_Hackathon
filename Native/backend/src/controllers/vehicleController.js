@@ -13,16 +13,29 @@ import { io } from '../utils/socketHandler.js';
  */
 export const getAllVehicles = async (req, res) => {
   try {
-    const ownerId = req.ownerId || req.body.ownerId || req.query.ownerId || '69cfd750239cb96c7844acb5';
-    console.log('🚗 Getting all vehicles - ownerId:', ownerId);
+    // Get ownerId from authenticated token or query parameter
+    let ownerId = req.ownerId; // From JWT token (verifyAuth middleware)
+    if (req.query.ownerId) {
+      // If query parameter provided, verify it matches the authenticated owner
+      if (req.ownerId && req.query.ownerId !== req.ownerId) {
+        console.error(`❌ Owner mismatch - Token owner: ${req.ownerId}, Query owner: ${req.query.ownerId}`);
+        return res.status(403).json({
+          success: false,
+          message: 'Unauthorized: Cannot access other owners data',
+        });
+      }
+      ownerId = req.query.ownerId;
+    }
 
     if (!ownerId) {
       console.error('❌ Vehicles: No ownerId found in request');
       return res.status(401).json({
         success: false,
-        message: 'Owner ID is required',
+        message: 'Authentication required - owner ID not found',
       });
     }
+
+    console.log('🚗 Getting all vehicles - ownerId:', ownerId);
 
     // Query filters from request
     const { status, protocol_status, in_transit, search } = req.query;
@@ -88,8 +101,16 @@ export const getAllVehicles = async (req, res) => {
 export const getVehicleById = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.ownerId || req.body.ownerId || req.query.ownerId || '69cfd750239cb96c7844acb5';
+    const ownerId = req.ownerId || req.query.ownerId;
+    
     console.log('🚗 Getting vehicle:', id);
+
+    if (!ownerId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required - owner ID not found',
+      });
+    }
 
     const vehicle = await Vehicle.findById(id)
       .populate('assigned_driver', 'email firstName lastName phone')
@@ -103,8 +124,12 @@ export const getVehicleById = async (req, res) => {
       });
     }
 
-    // Verify vehicle belongs to this owner
-    if (vehicle.ownerId.toString() !== ownerId) {
+    // Verify vehicle belongs to this owner with proper string comparison
+    const vehicleOwnerStr = vehicle.ownerId.toString();
+    const requestOwnerStr = typeof ownerId === 'object' ? ownerId.toString() : ownerId;
+    
+    if (vehicleOwnerStr !== requestOwnerStr) {
+      console.error(`❌ Owner mismatch for vehicle ${id} - Vehicle owner: ${vehicleOwnerStr}, Request owner: ${requestOwnerStr}`);
       return res.status(403).json({
         success: false,
         message: 'Unauthorized access to this vehicle',
@@ -132,7 +157,7 @@ export const getVehicleById = async (req, res) => {
  */
 export const createVehicle = async (req, res) => {
   try {
-    const ownerId = req.ownerId || req.body.ownerId || '69cfd750239cb96c7844acb5';
+    const ownerId = req.ownerId || req.query.ownerId;
     console.log('🚗 Creating vehicle - ownerId:', ownerId);
 
     if (!ownerId) {
@@ -212,7 +237,7 @@ export const createVehicle = async (req, res) => {
 export const updateVehicle = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.ownerId || req.body.ownerId || '69cfd750239cb96c7844acb5';
+    const ownerId = req.ownerId || req.query.ownerId;
 
     console.log('🚗 Updating vehicle:', id);
 
@@ -232,7 +257,12 @@ export const updateVehicle = async (req, res) => {
       });
     }
 
-    if (vehicle.ownerId.toString() !== ownerId) {
+    // Verify with proper string comparison
+    const vehicleOwnerStr = vehicle.ownerId.toString();
+    const requestOwnerStr = typeof ownerId === 'object' ? ownerId.toString() : ownerId;
+    
+    if (vehicleOwnerStr !== requestOwnerStr) {
+      console.error(`❌ Owner mismatch for vehicle ${id} - Vehicle owner: ${vehicleOwnerStr}, Request owner: ${requestOwnerStr}`);
       return res.status(403).json({
         success: false,
         message: 'Unauthorized access to this vehicle',
@@ -282,18 +312,18 @@ export const updateVehicle = async (req, res) => {
 export const deleteVehicle = async (req, res) => {
   try {
     const { id } = req.params;
-    const ownerId = req.ownerId || req.body.ownerId || req.query.ownerId || '69cfd750239cb96c7844acb5';
+    const ownerId = req.ownerId || req.query.ownerId;
 
     console.log('🗑️ Deleting vehicle:', id);
 
     if (!ownerId) {
       return res.status(401).json({
         success: false,
-        message: 'Owner ID is required',
+        message: 'Authentication required - owner ID not found',
       });
     }
 
-    // Verify vehicle belongs to this owner
+    // Verify vehicle belongs to this owner with proper string comparison
     const vehicle = await Vehicle.findById(id);
     if (!vehicle) {
       return res.status(404).json({
@@ -302,7 +332,11 @@ export const deleteVehicle = async (req, res) => {
       });
     }
 
-    if (vehicle.ownerId.toString() !== ownerId) {
+    const vehicleOwnerStr = vehicle.ownerId.toString();
+    const requestOwnerStr = typeof ownerId === 'object' ? ownerId.toString() : ownerId;
+    
+    if (vehicleOwnerStr !== requestOwnerStr) {
+      console.error(`❌ Owner mismatch for vehicle ${id} - Vehicle owner: ${vehicleOwnerStr}, Request owner: ${requestOwnerStr}`);
       return res.status(403).json({
         success: false,
         message: 'Unauthorized access to this vehicle',
@@ -370,9 +404,16 @@ export const lockVehicle = async (req, res) => {
   try {
     const { id } = req.params;
     const { driverId } = req.body;
-    const ownerId = req.ownerId || req.body.ownerId || '69cfd750239cb96c7844acb5';
+    const ownerId = req.ownerId || req.query.ownerId;
 
     console.log(`🔐 Attempting to lock vehicle ${id} for driver ${driverId}`);
+
+    if (!ownerId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required - owner ID not found',
+      });
+    }
 
     if (!driverId) {
       return res.status(400).json({

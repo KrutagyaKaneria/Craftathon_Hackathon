@@ -91,12 +91,13 @@ const VehicleSelection = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {vehicles.map((vehicle) => (
-              <div
-                key={vehicle._id || vehicle.id}
-                onClick={() => handleVehicleSelect(vehicle)}
-                className="group relative bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 cursor-pointer border-2 border-gray-700 hover:border-blue-500 transition-all duration-300 hover:shadow-[0_0_30px_rgba(59,130,246,0.2)] transform hover:-translate-y-2 overflow-hidden"
-              >
+            {Array.isArray(vehicles) && vehicles.length > 0 ? (
+              vehicles.map((vehicle) => (
+                <div
+                  key={vehicle._id || vehicle.id}
+                  onClick={() => handleVehicleSelect(vehicle)}
+                  className="group relative bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 cursor-pointer border-2 border-gray-700 hover:border-blue-500 transition-all duration-300 hover:shadow-[0_0_30px_rgba(59,130,246,0.2)] transform hover:-translate-y-2 overflow-hidden"
+                >
                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                   <span className="text-6xl">🚌</span>
                 </div>
@@ -127,16 +128,23 @@ const VehicleSelection = () => {
                 </div>
 
                 <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-600 to-purple-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-full text-center py-20 bg-gray-800/30 rounded-3xl border border-dashed border-gray-700">
+                <span className="text-8xl mb-6 block">🚧</span>
+                <h3 className="text-2xl font-bold text-gray-300">No buses available right now</h3>
+                <p className="text-gray-500 max-w-md mx-auto mt-2">All vehicles are currently in-use or in maintenance. Please wait for a bus to be released.</p>
               </div>
-            ))}
+            )}
           </div>
         )}
 
-        {vehicles.length === 0 && !loading && (
+        {!Array.isArray(vehicles) && !loading && (
           <div className="text-center py-20 bg-gray-800/30 rounded-3xl border border-dashed border-gray-700">
-            <span className="text-8xl mb-6 block">🚧</span>
-            <h3 className="text-2xl font-bold text-gray-300">No buses available right now</h3>
-            <p className="text-gray-500 max-w-md mx-auto mt-2">All vehicles are currently in-use or in maintenance. Please wait for a bus to be released.</p>
+            <span className="text-8xl mb-6 block">⚠️</span>
+            <h3 className="text-2xl font-bold text-gray-300">Error loading buses</h3>
+            <p className="text-gray-500 max-w-md mx-auto mt-2">An error occurred while loading the available buses. Please refresh the page.</p>
           </div>
         )}
       </div>
@@ -144,4 +152,4 @@ const VehicleSelection = () => {
   );
 };
 
-export default VehicleSelection;
+export default VehicleSelection;

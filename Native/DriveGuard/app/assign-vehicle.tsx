@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  useSafeAreaInsets,
 } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -198,6 +199,7 @@ const styles = StyleSheet.create({
 
 export default function AssignVehicleScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const driverId = params.driverId as string;
   const driverName = params.driverName as string;
@@ -365,7 +367,7 @@ export default function AssignVehicleScreen() {
       </ScrollView>
 
       {/* Footer */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Pressable
           style={[styles.cancelButton]}
           onPress={() => router.back()}

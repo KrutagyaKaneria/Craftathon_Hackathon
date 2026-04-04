@@ -1,6 +1,5 @@
 import React from 'react';
 import { Modal, StyleSheet, View, TouchableOpacity, Animated } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
@@ -32,7 +31,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({ isVisible, alert, onClos
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <BlurView intensity={20} style={StyleSheet.absoluteFill} tint={isDark ? 'dark' : 'light'} />
+        <View style={StyleSheet.absoluteFill} />
         
         <ThemedView style={[styles.centeredView, { borderColor: accentColor }]}>
           <View style={[styles.header, { backgroundColor: accentColor }]}>

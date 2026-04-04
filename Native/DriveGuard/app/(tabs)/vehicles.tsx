@@ -662,7 +662,7 @@ export default function VehiclesScreen() {
 
   if (!isAuthenticated || !token) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.centerContent}>
           <FontAwesome6 name="lock" size={48} color="#00d9ff" />
           <Text style={styles.errorText}>Authentication required</Text>
@@ -672,7 +672,7 @@ export default function VehiclesScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor="#070d1f" />
       
       <ScrollView 

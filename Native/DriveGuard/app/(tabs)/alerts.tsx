@@ -11,10 +11,12 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
-import { FontAwesome6 } from '@expo/vector-icons';
+import { FontAwesome6, Ionicons } from '@expo/vector-icons';
 import useAuthStore from '../../store/authStore';
 import useAlertsStore, { RealTimeAlert } from '../../store/alertsStore';
+import apiClient from '../../services/api';
 
 const styles = StyleSheet.create({
   container: {
@@ -295,6 +297,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#a5aac2',
   },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  resolveButton: {
+    backgroundColor: '#a3a6ff',
+  },
+  deleteButton: {
+    backgroundColor: 'rgba(255, 110, 132, 0.2)',
+    borderWidth: 1,
+    borderColor: '#ff6e84',
+  },
+  actionButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  resolveButtonText: {
+    color: '#070d1f',
+  },
+  deleteButtonText: {
+    color: '#ff6e84',
+  },
 });
 
 export default function AlertsScreen() {
@@ -309,6 +345,7 @@ export default function AlertsScreen() {
   const addAlert = useAlertsStore((state) => state.addAlert);
   const setConnected = useAlertsStore((state) => state.setConnected);
   const markAsResolved = useAlertsStore((state) => state.markAsResolved);
+  const deleteAlert = useAlertsStore((state) => state.deleteAlert);
 
   const connectWebSocket = () => {
     try {
@@ -395,10 +432,7 @@ export default function AlertsScreen() {
 
   useEffect(() => {
     if (isAuthenticated && token) {
-      // WebSocket disabled for now - will be enabled when backend implements /ws/alerts endpoint
-      console.log('⚠️ WebSocket disabled - waiting for backend implementation');
-      setConnected(false);
-
+      console.log('✅ Alerts screen loaded. Socket status:', isConnected ? 'Connected' : 'Offline');
       return () => {
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
@@ -408,7 +442,7 @@ export default function AlertsScreen() {
         }
       };
     }
-  }, [isAuthenticated, token]);
+  }, [isAuthenticated, token, isConnected]);
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -426,6 +460,32 @@ export default function AlertsScreen() {
   const handleMarkAsResolved = (alert: RealTimeAlert) => {
     markAsResolved(alert._id);
     Alert.alert('Success', `Alert "${alert.eventType}" marked as resolved`);
+  };
+
+  const handleDeleteAlert = (alert: RealTimeAlert) => {
+    Alert.alert(
+      'Delete Alert',
+      `Delete "${alert.eventType}" alert from ${alert.driverName}?`,
+      [
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        {
+          text: 'Delete',
+          onPress: async () => {
+            try {
+              // Call backend API to delete
+              await apiClient.delete(`/api/alerts/${alert._id}`);
+              // Remove from store
+              deleteAlert(alert._id);
+              Alert.alert('Success', 'Alert deleted successfully');
+            } catch (error: any) {
+              console.error('Error deleting alert:', error);
+              Alert.alert('Error', error.response?.data?.message || 'Failed to delete alert');
+            }
+          },
+          style: 'destructive',
+        },
+      ]
+    );
   };
 
   const formatTime = (timestamp: string) => {
@@ -498,10 +558,18 @@ export default function AlertsScreen() {
         {/* Alerts List */}
         {alerts.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <FontAwesome6 name="wifi-slash" size={48} color="#ff6e84" />
-            <Text style={styles.emptyText}>No socket connected</Text>
+            <FontAwesome6 
+              name={isConnected ? "inbox" : "wifi-slash"} 
+              size={48} 
+              color={isConnected ? "#a5aac2" : "#ff6e84"} 
+            />
+            <Text style={styles.emptyText}>
+              {isConnected ? 'No alerts yet' : 'Socket Disconnected'}
+            </Text>
             <Text style={{ color: '#a5aac2', fontSize: 12, marginTop: 8, textAlign: 'center', paddingHorizontal: 20 }}>
-              WebSocket connection to backend is disabled. Awaiting backend implementation of /ws/alerts endpoint.
+              {isConnected 
+                ? 'All triggered alerts will appear here'
+                : 'Reconnecting to server...'}
             </Text>
           </View>
         ) : (
@@ -579,14 +647,25 @@ export default function AlertsScreen() {
                   </View>
                 )}
 
-                {/* Action Button */}
-                <Pressable
-                  style={styles.markResolvedButton}
-                  onPress={() => handleMarkAsResolved(item)}
-                  disabled={item.resolved}
-                >
-                  <Text style={styles.markResolvedText}>Mark as Resolved</Text>
-                </Pressable>
+                {/* Action Buttons */}
+                <View style={styles.actionButtonsContainer}>
+                  <Pressable
+                    style={[styles.actionButton, styles.resolveButton]}
+                    onPress={() => handleMarkAsResolved(item)}
+                    disabled={item.resolved}
+                  >
+                    <FontAwesome6 name="check" size={11} color="#070d1f" />
+                    <Text style={[styles.actionButtonText, styles.resolveButtonText]}>Resolve</Text>
+                  </Pressable>
+                  
+                  <Pressable
+                    style={[styles.actionButton, styles.deleteButton]}
+                    onPress={() => handleDeleteAlert(item)}
+                  >
+                    <FontAwesome6 name="trash" size={11} color="#ff6e84" />
+                    <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
+                  </Pressable>
+                </View>
 
                 {/* Footer */}
                 <Text style={styles.remoteIntercom}>Remote Intercom</Text>

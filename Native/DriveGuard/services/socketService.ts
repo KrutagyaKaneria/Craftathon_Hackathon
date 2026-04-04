@@ -36,6 +36,7 @@ class SocketService {
 
     this.socket.on('authenticated', (data) => {
       console.log('🔓 WebSocket authenticated:', data);
+      this.notifyListeners('authenticated', data);
     });
 
     this.socket.on('new_alert', (alert) => {
@@ -43,12 +44,24 @@ class SocketService {
       this.notifyListeners('new_alert', alert);
     });
 
+    this.socket.on('session_summary', (summary) => {
+      console.log('🏁 Received session summary via WebSocket:', summary);
+      this.notifyListeners('session_summary', summary);
+    });
+
+    this.socket.on('vehicle_status_updated', (data) => {
+      console.log('🚗 Received vehicle status update:', data);
+      this.notifyListeners('vehicle_status_updated', data);
+    });
+
     this.socket.on('disconnect', (reason) => {
       console.log('👋 Disconnected from WebSocket server:', reason);
+      this.notifyListeners('disconnect', reason);
     });
 
     this.socket.on('error', (error) => {
       console.error('❌ WebSocket error:', error);
+      this.notifyListeners('error', error);
     });
   }
 
