@@ -7,6 +7,10 @@ from app.fatigue import detect_fatigue
 from app.rash import detect_rash
 from app.event_engine import process_event
 from app.face_verify import verify_face
+from app.socket_client import socket_manager
+from app.memory_manager import alert_state_manager, cleanup_on_session_end
+from app.database_validator import DatabaseValidator
+from app.db import db_instance
 
 router = APIRouter()
 
@@ -40,10 +44,90 @@ class FaceVerifyRequest(BaseModel):
 
 @router.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    """Health check endpoint. Returns active sessions info."""
+    active_sessions = socket_manager.get_active_sessions()
+    return {
+        "status": "ok",
+        "socket_connected": socket_manager.is_connected,
+        "active_sessions": len(active_sessions),
+        "tracked_sessions": list(active_sessions.keys())
+    }
+
+@router.get("/diagnostics")
+async def get_diagnostics():
+    """
+    Get detailed diagnostics about system health.
+    Includes database status, memory usage, and connection info.
+    """
+    validator = DatabaseValidator(db_instance.client, db_instance.db)
+    db_diagnostics = await validator.get_database_diagnostics()
+    db_ready = await validator.is_database_ready_for_sessions()
+    
+    memory_stats = alert_state_manager.get_stats()
+    active_sessions = socket_manager.get_active_sessions()
+    
+    return {
+        "status": "ok",
+        "database": {
+            "ready": db_ready,
+            **db_diagnostics
+        },
+        "memory": {
+            "alert_states": memory_stats
+        },
+        "socket": {
+            "connected": socket_manager.is_connected,
+            "active_sessions": len(active_sessions)
+        }
+    }
+
+@router.post("/session-ended")
+async def handle_session_ended(payload: dict):
+    """
+    Webhook to clean up alert state when a session ends.
+    Called by backend when session_ended event is fired.
+    
+    Payload: { "session_id": "...", "driver_id": "...", "vehicle_id": "..." }
+    """
+    session_id = payload.get("session_id")
+    driver_id = payload.get("driver_id")
+    
+    if not session_id:
+        logger.error("❌ Session-ended request missing session_id")
+        raise HTTPException(status_code=400, detail="session_id is required")
+    
+    logger.info(f"🧹 Cleaning up alert state for session_id: {session_id}, driver_id: {driver_id}")
+    
+    try:
+        # Clean up all alert states associated with this session
+        cleanup_on_session_end(session_id)
+        logger.info(f"✅ Alert state cleanup complete for session_id: {session_id}")
+        
+        return {
+            "status": "cleaned",
+            "session_id": session_id,
+            "driver_id": driver_id,
+            "message": "Alert state cleaned up successfully"
+        }
+    except Exception as e:
+        logger.error(f"❌ Error during session cleanup: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
 @router.post("/fatigue")
 async def handle_fatigue(payload: FatigueRequest):
+    """Process fatigue detection. Validates session is active before processing."""
+    # Validate session ID is provided
+    if not payload.session_id:
+        logger.error("❌ Fatigue request missing session_id")
+        raise HTTPException(status_code=400, detail="session_id is required")
+    
+    # Log session validation for debugging
+    is_active = socket_manager.is_session_active(payload.session_id)
+    logger.info(f"🔍 Fatigue check - Session {payload.session_id} active: {is_active}")
+    
+    if not is_active:
+        logger.warning(f"⚠️ Fatigue request for inactive session: {payload.session_id}")
+    
     img = decode_image_base64(payload.image)
     if img is None:
         raise HTTPException(status_code=400, detail="Invalid Base64 image payload.")
@@ -71,6 +155,19 @@ async def handle_fatigue(payload: FatigueRequest):
 
 @router.post("/rash")
 async def handle_rash(payload: RashRequest):
+    """Process rash driving detection. Validates session is active before processing."""
+    # Validate session ID is provided
+    if not payload.session_id:
+        logger.error("❌ Rash request missing session_id")
+        raise HTTPException(status_code=400, detail="session_id is required")
+    
+    # Log session validation for debugging
+    is_active = socket_manager.is_session_active(payload.session_id)
+    logger.info(f"🔍 Rash check - Session {payload.session_id} active: {is_active}")
+    
+    if not is_active:
+        logger.warning(f"⚠️ Rash request for inactive session: {payload.session_id}")
+    
     result = detect_rash(payload.acceleration, payload.brake, payload.gyro, payload.session_id)
     
     event_payload = None
@@ -91,6 +188,19 @@ async def handle_rash(payload: RashRequest):
 
 @router.post("/analyze")
 async def handle_analyze(payload: AnalyzeRequest):
+    """Process combined fatigue and rash detection. Validates session is active before processing."""
+    # Validate session ID is provided
+    if not payload.session_id:
+        logger.error("❌ Analyze request missing session_id")
+        raise HTTPException(status_code=400, detail="session_id is required")
+    
+    # Log session validation for debugging
+    is_active = socket_manager.is_session_active(payload.session_id)
+    logger.info(f"🔍 Analyze check - Session {payload.session_id} active: {is_active}")
+    
+    if not is_active:
+        logger.warning(f"⚠️ Analyze request for inactive session: {payload.session_id}")
+    
     img = decode_image_base64(payload.image)
     if img is None:
         raise HTTPException(status_code=400, detail="Invalid Base64 image payload.")

@@ -1,7 +1,17 @@
+import axios from 'axios';
 import { Session } from '../models/Session.js';
 import { Driver } from '../models/Driver.js';
 import { Vehicle } from '../models/Vehicle.js';
+import { Telemetry } from '../models/Telemetry.js';
 import { io } from '../utils/socketHandler.js';
+import { isAIServiceReady } from '../utils/aiServiceHealth.js';
+import { isDatabaseReadyForSessions } from '../utils/databaseValidator.js';
+import {
+  addTelemetrySnapshot,
+  getSessionTelemetry,
+  getSessionTelemetryStats,
+  deleteSessionTelemetry,
+} from '../utils/telemetryManager.js';
 
 /**
  * Session Controller
@@ -108,6 +118,34 @@ export const getSessionById = async (req, res) => {
 
 export const createSession = async (req, res) => {
   try {
+    // PRE-CONDITION 1: Check if AI-Service is ready before proceeding
+    console.log('🔄 STEP 1: Checking AI-Service readiness...');
+    const aiServiceReady = await isAIServiceReady();
+    
+    if (!aiServiceReady) {
+      console.error('❌ AI-Service is not ready. Session creation blocked.');
+      return res.status(503).json({
+        success: false,
+        message: 'AI-Service is not ready. Please try again in a moment.',
+        error: 'Service temporary unavailable - AI monitoring service not ready',
+      });
+    }
+    console.log('✅ STEP 1: AI-Service is ready. Proceeding...');
+
+    // PRE-CONDITION 2: Check if database is ready and writable
+    console.log('🔄 STEP 2: Checking database readiness...');
+    const dbReady = await isDatabaseReadyForSessions();
+    
+    if (!dbReady) {
+      console.error('❌ Database is not ready or not writable. Session creation blocked.');
+      return res.status(503).json({
+        success: false,
+        message: 'Database is not ready. Please try again in a moment.',
+        error: 'Service temporary unavailable - Database not accessible',
+      });
+    }
+    console.log('✅ STEP 2: Database is ready. Proceeding with session creation...');
+
     // Get ownerId from authenticated token or query parameter
     let ownerId = req.ownerId || req.user?.ownerId;
     if (req.query.ownerId) {
@@ -330,6 +368,25 @@ export const updateSession = async (req, res) => {
         },
         message: `Session ended for ${updatedSession.driverName} on vehicle ${updatedSession.vehicleNumber}. Safety Score: ${updatedSession.safetyScore}`,
       });
+      
+      // 🧹 Notify AI-service to clean up alert state for this session
+      try {
+        const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+        const cleanupPayload = {
+          session_id: updatedSession._id.toString(),
+          driver_id: updatedSession.driverId,
+          vehicle_id: updatedSession.vehicleId
+        };
+        
+        const response = await axios.post(`${aiServiceUrl}/session-ended`, cleanupPayload, {
+          timeout: 5000
+        });
+        console.log(`✅ AI-service alert state cleanup triggered for session ${updatedSession._id}: ${response.status}`);
+      } catch (error) {
+        console.error(`⚠️  Failed to notify AI-service of session end: ${error.message}`);
+        // Don't fail the session end update if cleanup notification fails
+        // The TTL-based cleanup will catch any orphaned states after 24 hours
+      }
     }
     
     console.log('✅ Session updated:', updatedSession._id);
@@ -455,15 +512,28 @@ export const updateSessionTelemetry = async (req, res) => {
     if (avgSpeed !== undefined) session.avgSpeed = avgSpeed;
     if (maxSpeed !== undefined) session.maxSpeed = maxSpeed;
 
-    // Add telemetry snapshot for real-time tracking
+    // 🆕 Add telemetry snapshot to dedicated collection (not embedded array)
     if (telemetrySnapshot) {
-      session.telemetrySnapshots.push({
-        timestamp: new Date(),
-        ...telemetrySnapshot,
-      });
-      // Keep only last 1000 snapshots
-      if (session.telemetrySnapshots.length > 1000) {
-        session.telemetrySnapshots = session.telemetrySnapshots.slice(-1000);
+      try {
+        await addTelemetrySnapshot({
+          sessionId: session._id,
+          driverId: session.driverId,
+          vehicleId: session.vehicleId,
+          distance: telemetrySnapshot.distance,
+          speed: telemetrySnapshot.speed,
+          acceleration: telemetrySnapshot.acceleration,
+          brake: telemetrySnapshot.brake,
+          steering: telemetrySnapshot.steering,
+          latitude: telemetrySnapshot.latitude,
+          longitude: telemetrySnapshot.longitude,
+          altitude: telemetrySnapshot.altitude,
+          engineRPM: telemetrySnapshot.engineRPM,
+          fuelLevel: telemetrySnapshot.fuelLevel,
+          odometerReading: telemetrySnapshot.odometerReading,
+        });
+      } catch (telemetryError) {
+        console.warn('⚠️  Failed to save telemetry snapshot:', telemetryError.message);
+        // Don't fail the entire request if telemetry save fails
       }
     }
 

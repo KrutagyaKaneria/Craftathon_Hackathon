@@ -73,20 +73,8 @@ const SessionSchema = new mongoose.Schema(
       type: Number,
       default: 0, // in km/h
     },
-    // Telemetry array for real-time updates
-    telemetrySnapshots: {
-      type: [
-        {
-          timestamp: Date,
-          distance: Number,
-          speed: Number,
-          acceleration: Number,
-          brake: Number,
-          steering: Number,
-        },
-      ],
-      default: [],
-    },
+    // ℹ️  Telemetry snapshots now stored in separate Telemetry collection (linked by sessionId)
+    // This prevents Session document bloat and improves query performance
     safetyScore: {
       type: Number,
       min: 0,

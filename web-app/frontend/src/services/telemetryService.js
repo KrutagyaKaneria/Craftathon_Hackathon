@@ -16,6 +16,12 @@ class TelemetryService {
    * Send sensor telemetry data (acceleration, brake, steering)
    */
   sendSensorData(driverId, sessionId, sensorData) {
+    // STRICT: Validate session context before sending
+    if (!sessionId) {
+      console.error('❌ CRITICAL: Cannot send sensor data without sessionId. Data dropped.');
+      return;
+    }
+
     if (!this.socket) {
       console.warn('⚠️ Socket not connected, cannot send sensor data');
       return;
@@ -41,6 +47,12 @@ class TelemetryService {
    * Send fatigue detection alert with priority
    */
   sendFatigueAlert(driverId, sessionId, fatigueData) {
+    // STRICT: Validate session context before sending
+    if (!sessionId) {
+      console.error('❌ CRITICAL: Cannot send fatigue alert without sessionId. Alert dropped.');
+      return;
+    }
+
     if (!this.socket) {
       console.warn('⚠️ Socket not connected, cannot send fatigue alert');
       return;
@@ -79,6 +91,12 @@ class TelemetryService {
    * Send rash driving alert
    */
   sendRashDrivingAlert(driverId, sessionId, rashData) {
+    // STRICT: Validate session context before sending
+    if (!sessionId) {
+      console.error('❌ CRITICAL: Cannot send rash driving alert without sessionId. Alert dropped.');
+      return;
+    }
+
     if (!this.socket) {
       console.warn('⚠️ Socket not connected, cannot send rash driving alert');
       return;
@@ -114,6 +132,12 @@ class TelemetryService {
    * Send combined analysis (both sensor + AI data)
    */
   sendCombinedAnalysis(driverId, sessionId, analysisData) {
+    // STRICT: Validate session context before sending
+    if (!sessionId) {
+      console.error('❌ CRITICAL: Cannot send analysis without sessionId. Data dropped.');
+      return;
+    }
+
     if (!this.socket) {
       console.warn('⚠️ Socket not connected, cannot send analysis');
       return;
@@ -141,6 +165,12 @@ class TelemetryService {
    * Send end of session summary
    */
   sendSessionSummary(driverId, sessionId, summaryData) {
+    // STRICT: Validate session context before sending
+    if (!sessionId) {
+      console.error('❌ CRITICAL: Cannot send session summary without sessionId. Data dropped.');
+      return;
+    }
+
     if (!this.socket) {
       console.warn('⚠️ Socket not connected, cannot send session summary');
       return;

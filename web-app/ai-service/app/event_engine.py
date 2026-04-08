@@ -5,8 +5,8 @@ from app.config import settings
 from app.utils import logger
 from app.db import insert_event
 from app.socket_client import socket_manager
-
-_alert_state = {}
+from app.memory_manager import get_alert_state, set_alert_state
+from app.alert_retry import send_alert_with_retry
 
 def _state_key(driver_id: str, session_id: str, event_type: str, subtype: str) -> str:
     return f"{driver_id}:{session_id}:{event_type}:{subtype}"
@@ -37,18 +37,17 @@ def _evaluate_owner_alert(event_payload: dict) -> tuple[bool, dict]:
     now = datetime.now(timezone.utc)
     min_consecutive, cooldown_seconds = _get_rule(event_type)
 
-    state = _alert_state.get(
-        key,
-        {
+    state = get_alert_state(key)
+    if not state:
+        state = {
             "consecutive_hits": 0,
             "suppressed_count": 0,
             "last_event_at": None,
             "last_sent_at": None,
-        },
-    )
+        }
 
     # Reset episode if the event stopped for a while.
-    last_event_at = state["last_event_at"]
+    last_event_at = state.get("last_event_at")
     if last_event_at is not None and (now - last_event_at).total_seconds() > settings.ALERT_STALE_RESET_SECONDS:
         state["consecutive_hits"] = 0
         state["suppressed_count"] = 0
@@ -57,9 +56,9 @@ def _evaluate_owner_alert(event_payload: dict) -> tuple[bool, dict]:
     state["consecutive_hits"] += 1
     state["last_event_at"] = now
 
-    last_sent_at = state["last_sent_at"]
+    last_sent_at = state.get("last_sent_at")
     if state["consecutive_hits"] < min_consecutive:
-        _alert_state[key] = state
+        set_alert_state(key, state)
         return False, {
             "reason": "below_consecutive_threshold",
             "consecutive_hits": state["consecutive_hits"],
@@ -76,13 +75,13 @@ def _evaluate_owner_alert(event_payload: dict) -> tuple[bool, dict]:
             "suppressed_count": state["suppressed_count"],
         }
         state["suppressed_count"] = 0
-        _alert_state[key] = state
+        set_alert_state(key, state)
         return True, meta
 
     elapsed_since_last_alert = (now - last_sent_at).total_seconds()
     if elapsed_since_last_alert < cooldown_seconds:
         state["suppressed_count"] += 1
-        _alert_state[key] = state
+        set_alert_state(key, state)
         return False, {
             "reason": "cooldown_active",
             "cooldown_seconds": cooldown_seconds,
@@ -101,28 +100,26 @@ def _evaluate_owner_alert(event_payload: dict) -> tuple[bool, dict]:
         "cooldown_seconds": cooldown_seconds,
     }
     state["suppressed_count"] = 0
-    _alert_state[key] = state
+    set_alert_state(key, state)
     return True, meta
 
 async def send_backend_alert(event_payload: dict):
     """
-    Sends a POST request to the central backend for high severity events.
-    Fails silently in terms of API response, writing solely to logs.
+    Sends a POST request to the backend for high severity events.
+    Uses exponential backoff retry to handle network issues.
     """
     if not settings.BACKEND_URL:
-        logger.warning("No BACKEND_URL configured. Skipping alert.")
+        logger.warning("❌ No BACKEND_URL configured. Cannot send alert.")
         return
 
-    try:
-        async with httpx.AsyncClient() as client:
-            logger.info(f"Sending HIGH severity alert to {settings.BACKEND_URL}")
-            response = await client.post(settings.BACKEND_URL, json=event_payload, timeout=5.0)
-            if response.status_code >= 400:
-                logger.error(f"Failed to send alert. Status {response.status_code}: {response.text}")
-            else:
-                logger.info(f"Alert sent successfully: {response.status_code}")
-    except Exception as e:
-        logger.error(f"Exception while sending alert to backend: {e}")
+    # Use new retry mechanism with exponential backoff
+    success = await send_alert_with_retry(event_payload, settings.BACKEND_URL)
+    
+    if not success:
+        logger.error(f"🔴 CRITICAL: Failed to send high-severity alert after all retries")
+        logger.error(f"   Driver: {event_payload.get('driver_id')}")
+        logger.error(f"   Event: {event_payload.get('type')} / {event_payload.get('subtype')}")
+        # Alert lost - can only log and hope the event was captured in DB
 
 async def process_event(driver_id: str, session_id: str, event_type: str, subtype: str, severity: str, metrics: dict) -> dict:
     """

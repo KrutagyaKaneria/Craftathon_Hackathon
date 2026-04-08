@@ -41,18 +41,34 @@ const VehicleSelection = () => {
       setError('');
       setLoading(true);
       
+      console.log(`🚗 STEP 1: Selected vehicle - ${vehicle.vehicle_number}`);
+      
       // Atomic locking on backend
       const result = await apiService.lockVehicle(vehicle._id || vehicle.id, verifiedDriver._id || verifiedDriver.id, verifiedDriver.ownerId);
       
       if (result.success) {
+        console.log(`✅ STEP 1: Vehicle locked - ${result.data.vehicle_number}`);
         setSelectedVehicle(result.data);
+        
         // Start building the session
+        console.log(`📝 STEP 2: Creating session with backend...`);
         const sessionResult = await apiService.startSession(verifiedDriver._id || verifiedDriver.id, vehicle._id || vehicle.id, verifiedDriver.ownerId);
-        setSession(sessionResult.data || sessionResult);
-        navigate('/dashboard');
+        
+        if (sessionResult.data && (sessionResult.data._id || sessionResult.data.session_id)) {
+          const sessionId = sessionResult.data._id || sessionResult.data.session_id;
+          console.log(`✅ STEP 2: Session created - ${sessionId}`);
+          console.log(`   Driver: ${sessionResult.data.driverName}`);
+          console.log(`   Vehicle: ${sessionResult.data.vehicleNumber}`);
+          
+          console.log(`✅ STEP 3: Session context stored. Navigating to dashboard...`);
+          setSession(sessionResult.data || sessionResult);
+          navigate('/dashboard');
+        } else {
+          throw new Error('Session created but no ID received');
+        }
       }
     } catch (error) {
-      console.error('Failed to allocate vehicle:', error);
+      console.error('❌ Failed to allocate vehicle:', error);
       setError(error.message || 'Bus already selected by another driver');
       
       // Refresh list to remove the taken bus

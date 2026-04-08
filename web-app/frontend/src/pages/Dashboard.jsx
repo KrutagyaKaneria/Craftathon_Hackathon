@@ -44,6 +44,11 @@ const Dashboard = () => {
   const driverId = verifiedDriver?._id || verifiedDriver?.id;
   const sessionId = session?._id || session?.session_id;
 
+  // STRICT ORDER: Ensure sessionId is valid before proceeding
+  if (!sessionId && !cameraError) {
+    console.error('❌ CRITICAL: Session ID is missing. Cannot start camera monitoring without session context.');
+  }
+
   // Real-time WebSocket connection
   useSocket(verifiedDriver?.ownerId);
 
@@ -68,23 +73,49 @@ const Dashboard = () => {
   const calibratedRpm = Math.round(idleRpm + ((accelNorm ** 1.35) * (maxRpm - idleRpm)));
 
   useEffect(() => {
+    // STRICT ORDER ENFORCEMENT:
+    // 1. Verify all prerequisites exist
+    // 2. Only start camera AFTER session is fully created
+    // 3. Pass sessionId to all AI-Service calls
+    
     if (!verifiedDriver || !selectedVehicle || !session) {
+      console.warn('⚠️  Prerequisites missing for dashboard. Redirecting to home.');
       navigate('/');
       return;
     }
-    // Auto-start systems
+
+    // MANDATORY: Ensure sessionId exists before any AI monitoring
+    const sessionIdForCamera = session?._id || session?.session_id;
+    if (!sessionIdForCamera) {
+      console.error('❌ CRITICAL: Session ID not available. Cannot start AI monitoring without session context.');
+      setRequestError('Session context not ready. Please try again.');
+      return;
+    }
+
+    console.log(`✅ STEP 2: Session context verified (${sessionIdForCamera}). Starting camera...`);
+
+    // Auto-start systems ONLY after all validations pass
     const autoStart = async () => {
-      await startCamera();
-      startFatigueDetection();
-      setIsRunning(true);
+      try {
+        console.log(`✅ STEP 3: Starting camera for driver ${driverId} on session ${sessionIdForCamera}`);
+        await startCamera();
+        
+        console.log(`✅ STEP 4: Camera started. Initiating fatigue detection...`);
+        startFatigueDetection();
+        setIsRunning(true);
+      } catch (error) {
+        console.error('❌ Failed to start camera:', error);
+        setRequestError('Failed to initialize camera monitoring');
+      }
     };
+    
     autoStart();
 
     return () => {
       stopFatigueDetection();
       stopCamera();
     };
-  }, [verifiedDriver, selectedVehicle, session, navigate]);
+  }, [verifiedDriver, selectedVehicle, session, navigate, startCamera, stopCamera, startFatigueDetection, stopFatigueDetection, driverId]);
 
   // Simulated Stats Timer
   useEffect(() => {
