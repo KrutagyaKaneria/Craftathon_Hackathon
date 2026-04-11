@@ -30,53 +30,87 @@ export const signup = async (req, res) => {
       });
     }
 
-    // Check if owner already exists
-    const existingOwner = await Owner.findOne({ email });
-    if (existingOwner) {
-      return res.status(409).json({
+    if (!email.includes('@')) {
+      return res.status(400).json({
         success: false,
-        message: 'Email already registered'
+        message: 'Please provide a valid email address'
       });
     }
 
-    // Create new owner
-    const owner = new Owner({
-      email,
-      password,
-      firstName: firstName || '',
-      lastName: lastName || '',
-      phone: phone || ''
-    });
-
-    await owner.save();
-    console.log('✅ Owner created:', owner._id);
-
-    // Generate token
-    const token = jsonwebtoken.sign(
-      { ownerId: owner._id, type: 'owner' },
-      getJWTSecret(),
-      { expiresIn: '7d' }
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Owner registered successfully',
-      data: {
-        ownerId: owner._id,
-        email: owner.email,
-        firstName: owner.firstName,
-        lastName: owner.lastName,
-        token
+    try {
+      // Check if owner already exists
+      const existingOwner = await Owner.findOne({ email });
+      if (existingOwner) {
+        console.log('⚠️  Email already registered:', email);
+        return res.status(409).json({
+          success: false,
+          message: 'Email already registered'
+        });
       }
-    });
+
+      // Create new owner
+      const owner = new Owner({
+        email,
+        password,
+        firstName: firstName || '',
+        lastName: lastName || '',
+        phone: phone || ''
+      });
+
+      await owner.save();
+      console.log('✅ Owner created:', owner._id);
+
+      // Generate token
+      const token = jsonwebtoken.sign(
+        { ownerId: owner._id, type: 'owner' },
+        getJWTSecret(),
+        { expiresIn: '7d' }
+      );
+
+      res.status(201).json({
+        success: true,
+        message: 'Owner registered successfully',
+        data: {
+          ownerId: owner._id,
+          email: owner.email,
+          firstName: owner.firstName,
+          lastName: owner.lastName,
+          token
+        }
+      });
+    } catch (dbError) {
+      // Handle MongoDB connection timeout
+      if (dbError.message && dbError.message.includes('buffering timed out')) {
+        console.error('❌ Database connection timeout during signup');
+        return res.status(503).json({
+          success: false,
+          message: 'Database service temporarily unavailable',
+          error: 'MongoDB connection timeout - please try again'
+        });
+      }
+      
+      // Handle duplicate key error
+      if (dbError.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: 'Email already registered'
+        });
+      }
+      
+      throw dbError;
+    }
   } catch (error) {
     console.error('❌ Signup error:', error);
-    if (error.code === 11000) {
-      return res.status(409).json({
+    
+    // Handle specific MongoDB connection errors
+    if (error.message && (error.message.includes('timed out') || error.message.includes('connection'))) {
+      return res.status(503).json({
         success: false,
-        message: 'Email already registered'
+        message: 'Database service temporarily unavailable',
+        error: error.message
       });
     }
+
     res.status(500).json({
       success: false,
       message: error.message || 'Error during signup'
@@ -98,49 +132,74 @@ export const login = async (req, res) => {
       });
     }
 
-    // Find owner and select password field
-    const owner = await Owner.findOne({ email }).select('+password');
+    try {
+      // Find owner and select password field
+      const owner = await Owner.findOne({ email }).select('+password').maxTimeMS(5000);
 
-    if (!owner) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
-    }
-
-    // Check password
-    const isPasswordValid = await owner.matchPassword(password);
-
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
-    }
-
-    // Generate token
-    const token = jsonwebtoken.sign(
-      { ownerId: owner._id, type: 'owner' },
-      getJWTSecret(),
-      { expiresIn: '7d' }
-    );
-
-    console.log('✅ Owner logged in:', owner._id);
-
-    res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      data: {
-        ownerId: owner._id,
-        email: owner.email,
-        firstName: owner.firstName,
-        lastName: owner.lastName,
-        phone: owner.phone,
-        token
+      if (!owner) {
+        console.log('⚠️  Owner not found:', email);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid email or password'
+        });
       }
-    });
+
+      // Check password
+      const isPasswordValid = await owner.matchPassword(password);
+
+      if (!isPasswordValid) {
+        console.log('⚠️  Invalid password for:', email);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid email or password'
+        });
+      }
+
+      // Generate token
+      const token = jsonwebtoken.sign(
+        { ownerId: owner._id, type: 'owner' },
+        getJWTSecret(),
+        { expiresIn: '7d' }
+      );
+
+      console.log('✅ Owner logged in:', owner._id);
+
+      res.status(200).json({
+        success: true,
+        message: 'Login successful',
+        data: {
+          ownerId: owner._id,
+          email: owner.email,
+          firstName: owner.firstName,
+          lastName: owner.lastName,
+          phone: owner.phone,
+          token
+        }
+      });
+    } catch (dbError) {
+      // Handle MongoDB connection timeout
+      if (dbError.message && dbError.message.includes('buffering timed out')) {
+        console.error('❌ Database connection timeout during login');
+        return res.status(503).json({
+          success: false,
+          message: 'Database service temporarily unavailable',
+          error: 'MongoDB connection timeout - please try again'
+        });
+      }
+      throw dbError;
+    }
   } catch (error) {
     console.error('❌ Login error:', error);
+    
+    // Handle specific MongoDB connection errors
+    if (error.message && (error.message.includes('timed out') || error.message.includes('connection'))) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service temporarily unavailable',
+        error: error.message
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: error.message || 'Error during login'

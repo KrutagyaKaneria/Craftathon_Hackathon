@@ -65,6 +65,7 @@ export const useAuth = () => {
         store.setLoading(true);
         store.setError(null);
         
+        console.log('📝 Starting signup for:', email);
         const data = await authAPI.signup(email, password);
         
         if (data.token) {
@@ -84,13 +85,28 @@ export const useAuth = () => {
           await store.setUser(userData);
           
           store.setLoading(false);
+          console.log('✅ Signup successful');
           return { success: true, data };
         } else {
-          throw new Error('No token received from server');
+          const err = 'No token received from server';
+          console.error('❌ ' + err);
+          throw new Error(err);
         }
       } catch (err: any) {
         const store = useAuthStore.getState();
-        const errorMessage = err.message || 'Signup failed';
+        
+        // Extract error message from different error formats
+        let errorMessage = 'Signup failed';
+        
+        if (typeof err === 'object' && err?.message) {
+          errorMessage = err.message;
+        } else if (typeof err === 'string') {
+          errorMessage = err;
+        } else if (err?.message) {
+          errorMessage = err.message;
+        }
+        
+        console.error('❌ Signup failed:', errorMessage);
         store.setError(errorMessage);
         store.setLoading(false);
         return { success: false, error: errorMessage };

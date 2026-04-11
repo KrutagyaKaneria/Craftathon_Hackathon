@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAppStore from '../store/appStore.js';
 import apiService from '../services/api.js';
@@ -9,20 +9,24 @@ const DriverSelection = () => {
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState(false);
   const { drivers, setDrivers, setSelectedDriver } = useAppStore();
+  const hasFetchedRef = useRef(false); // Track if we've already fetched
 
   useEffect(() => {
     const fetchAllDrivers = async () => {
-      // Only fetch if we don't have drivers yet
-      if (drivers && Array.isArray(drivers) && drivers.length > 0) {
-        setLoading(false);
+      // Only fetch once on component mount
+      if (hasFetchedRef.current) {
+        console.log('✅ Drivers already fetched, skipping...');
         return;
       }
+
+      hasFetchedRef.current = true;
       
       try {
         setLoading(true);
         console.log('🌐 Fetching all public drivers...');
         const driverList = await apiService.getPublicDrivers();
         setDrivers(Array.isArray(driverList) ? driverList : []);
+        console.log(`✅ Loaded ${Array.isArray(driverList) ? driverList.length : 0} drivers`);
       } catch (error) {
         console.error('❌ Failed to fetch drivers:', error);
         setDrivers([]);
@@ -31,7 +35,7 @@ const DriverSelection = () => {
       }
     };
     fetchAllDrivers();
-  }, [setDrivers, drivers]);
+  }, []); // Empty dependency array - fetch only once on mount
 
   const handleDriverSelect = (driver) => {
     try {

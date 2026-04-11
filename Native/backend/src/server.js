@@ -11,6 +11,7 @@ import sessionRoutes from './routes/sessionRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
 import { connectDB } from './config/database.js';
 import { validateDatabaseSetup, isDatabaseReadyForSessions } from './utils/databaseValidator.js';
+import { ipWhitelist } from './config/ipWhitelist.js';
 
 import http from 'http';
 import { initSocket } from './utils/socketHandler.js';
@@ -26,45 +27,9 @@ const PORT = process.env.PORT || 5000;
 initSocket(server);
 
 // Middleware
-// 🔒 CORS Configuration - Restrict to known origins
+// 🔒 CORS Configuration - Using IP Whitelist
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like native mobile apps or server-to-server)
-    if (!origin) return callback(null, true);
-    
-    // Define allowed origins for CORS
-    const allowedOrigins = [
-      // Frontend URLs
-      'http://localhost:3000',    // React dev
-      'http://localhost:5173',    // Vite dev
-      'http://localhost:8081',    // Expo web
-      'http://localhost:19000',   // Expo dev
-      'http://127.0.0.1:3000',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:8081',
-      'http://127.0.0.1:19000',
-    ];
-    
-    // Allow local network IPs for mobile testing
-    const isLocalOrNetwork = 
-      origin.includes('localhost') || 
-      origin.includes('127.0.0.1') || 
-      origin.includes('192.168.') ||
-      origin.includes('10.');
-    
-    // Allow production URLs via environment variable
-    const prodUrl = process.env.FRONTEND_URL;
-    if (prodUrl && origin.includes(prodUrl)) {
-      return callback(null, true);
-    }
-    
-    if (allowedOrigins.includes(origin) || (isLocalOrNetwork && process.env.NODE_ENV !== 'production')) {
-      callback(null, true);
-    } else {
-      console.warn(`❌ CORS blocked origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: ipWhitelist.getCorsCallback(process.env.NODE_ENV !== 'production'),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

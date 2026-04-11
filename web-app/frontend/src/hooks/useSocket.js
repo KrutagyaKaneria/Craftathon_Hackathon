@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 import useAppStore from '../store/appStore.js';
 import { telemetryService } from '../services/telemetryService.js';
 
-const SOCKET_URL = 'http://localhost:5000';
+const SOCKET_URL = 'http://10.44.202.155:5000';
 
 const useSocket = (ownerId) => {
   const socketRef = useRef(null);

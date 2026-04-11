@@ -32,22 +32,49 @@ export const getAllDrivers = async (req, res) => {
     if (isPublicRoute || !isAuthenticated) {
       console.log('📥 PUBLIC REQUEST: Fetching ALL drivers from database (no owner filter)');
       
-      const allDrivers = await Driver.find({})
-        .select('-password')
-        .sort({ createdAt: -1 })
-        .lean();
+      try {
+        const allDrivers = await Driver.find({})
+          .select('-password')
+          .sort({ createdAt: -1 })
+          .lean()
+          .maxTimeMS(5000); // Set timeout to 5 seconds
 
-      console.log(`✅ Loaded ${allDrivers.length} drivers total from database`);
-      allDrivers.slice(0, 3).forEach((driver, index) => {
-        console.log(`  [${index + 1}] ${driver.firstName} ${driver.lastName || ''} (Owner: ${driver.ownerId})`);
-      });
+        if (!allDrivers || allDrivers.length === 0) {
+          console.log('⚠️  No drivers available in database');
+          return res.status(200).json({
+            success: true,
+            data: [],
+            count: 0,
+            message: 'No drivers available in database yet'
+          });
+        }
 
-      return res.status(200).json({
-        success: true,
-        data: allDrivers,
-        count: allDrivers.length,
-        message: 'All drivers (public access - no authentication required)'
-      });
+        console.log(`✅ Loaded ${allDrivers.length} drivers total from database`);
+        allDrivers.slice(0, 3).forEach((driver, index) => {
+          console.log(`  [${index + 1}] ${driver.firstName} ${driver.lastName || ''} (Owner: ${driver.ownerId})`);
+        });
+
+        return res.status(200).json({
+          success: true,
+          data: allDrivers,
+          count: allDrivers.length,
+          message: 'All drivers (public access - no authentication required)'
+        });
+      } catch (dbError) {
+        console.error('❌ Database connection error:', dbError.message);
+        
+        // If it's a timeout or connection error, return proper response
+        if (dbError.message.includes('timed out') || dbError.message.includes('connection')) {
+          return res.status(503).json({
+            success: false,
+            data: [],
+            count: 0,
+            message: 'Database connection unavailable - please try again later',
+            error: dbError.message
+          });
+        }
+        throw dbError;
+      }
     }
 
     // AUTHENTICATED ROUTE: Return ONLY owner's drivers
@@ -65,7 +92,19 @@ export const getAllDrivers = async (req, res) => {
     const ownerDrivers = await Driver.find({ ownerId })
       .select('-password')
       .sort({ createdAt: -1 })
-      .lean();
+      .lean()
+      .maxTimeMS(5000);
+
+    if (!ownerDrivers || ownerDrivers.length === 0) {
+      console.log(`⚠️  No drivers found for owner ${ownerId}`);
+      return res.status(200).json({
+        success: true,
+        data: [],
+        count: 0,
+        ownerId: ownerId,
+        message: 'No drivers available for this owner'
+      });
+    }
 
     console.log(`✅ Loaded ${ownerDrivers.length} drivers for owner ${ownerId}`);
     ownerDrivers.forEach((driver, index) => {
@@ -81,8 +120,22 @@ export const getAllDrivers = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Get all drivers error:', error);
+    
+    // Handle mongoose connection timeout
+    if (error.message && error.message.includes('buffering timed out')) {
+      return res.status(503).json({
+        success: false,
+        data: [],
+        count: 0,
+        message: 'Database service temporarily unavailable',
+        error: 'MongoDB connection timeout'
+      });
+    }
+
     return res.status(500).json({
       success: false,
+      data: [],
+      count: 0,
       message: 'Failed to fetch drivers',
       error: error.message,
     });

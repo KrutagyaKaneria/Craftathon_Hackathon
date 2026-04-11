@@ -1,16 +1,14 @@
 import axios from 'axios';
 import { safeStorage } from '../utils/safeStorage';
+import { apiConfigManager } from '../utils/apiConfigManager';
 
-// Configure backend API URL
-// For LOCAL DEVELOPMENT: http://YOUR_LOCAL_IP:5000
-// For PRODUCTION: https://your-backend-domain.com
-// Get your local IP: ipconfig (Windows) or ifconfig (Mac/Linux)
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.145.246.155:5000';
+// Configure backend API URL (now using APIConfigManager)
+const API_BASE_URL = apiConfigManager.getConfig().baseURL;
 
 // Create axios instance
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: apiConfigManager.getConfig().timeout,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -44,12 +42,28 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error) => {
-    console.error('❌ API Error:', {
-      status: error.response?.status,
-      message: error.response?.data?.message,
-      url: error.config?.url,
-      errorData: error.response?.data
-    });
+    // Check if there's a response from server
+    if (error.response) {
+      console.error('❌ API Error Response:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        message: error.response?.data?.message,
+        url: error.config?.url,
+        errorData: error.response?.data,
+        code: error.code
+      });
+    } else if (error.request) {
+      // Request made but no response received
+      console.error('❌ No Response from Server:', {
+        url: error.config?.url,
+        message: 'Server did not respond - Check if backend is running',
+        code: error.code,
+        errno: error.errno
+      });
+    } else {
+      // Error in request setup
+      console.error('❌ Request Setup Error:', error.message);
+    }
     
     if (error.response?.status === 401) {
       // Token expired or invalid - clear storage properly
@@ -81,17 +95,43 @@ export const authAPI = {
 
   signup: async (email: string, password: string) => {
     try {
+      console.log('📝 Signup request to /api/auth/signup');
       const response = await apiClient.post('/api/auth/signup', { email, password });
+      
       if (response.data.success && response.data.data.token) {
         const token = response.data.data.token;
         await safeStorage.setItem('authToken', token);
+        console.log('✅ Signup successful, token saved');
         return response.data.data;
       }
-      throw new Error(response.data.message || 'Signup failed');
+      
+      const errorMsg = response.data.message || 'Signup failed';
+      console.error('❌ Signup response not successful:', errorMsg);
+      throw new Error(errorMsg);
     } catch (error: any) {
+      let errorMessage = 'Signup failed';
+      let errorStatus = undefined;
+      
+      if (error.response) {
+        // Server responded with error
+        errorMessage = error.response?.data?.message || error.response?.statusText || 'Server error';
+        errorStatus = error.response?.status;
+        console.error('❌ Signup server error:', { status: errorStatus, message: errorMessage });
+      } else if (error.request) {
+        // Request made but no response - backend not running
+        errorMessage = '⚠️ Backend server not responding\n\nCheck if backend is running:\n• npm run dev (in backend folder)\n• Verify IP: http://10.44.202.155:5000/api/health\n• Update .env if IP changed: EXPO_PUBLIC_API_URL=http://YOUR_IP:5000';
+        console.error('❌ Signup network error:', errorMessage);
+      } else if (error.message) {
+        // Other error
+        errorMessage = error.message;
+        console.error('❌ Signup error:', errorMessage);
+      }
+      
       throw {
-        message: error.response?.data?.message || error.message || 'Signup failed',
-        status: error.response?.status
+        message: errorMessage,
+        status: errorStatus,
+        details: error.response?.data,
+        troubleshoot: await apiConfigManager.getTroubleshootingInfo(),
       };
     }
   },

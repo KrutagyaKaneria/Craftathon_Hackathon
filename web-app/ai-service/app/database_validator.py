@@ -42,7 +42,7 @@ class DatabaseValidator:
         try:
             # Step 1: Verify connection
             logger.info("1️⃣  Testing MongoDB connection...")
-            if not self.db:
+            if self.db is None:
                 errors.append("❌ MongoDB database instance not initialized")
                 logger.error("   ❌ Database not initialized")
                 return {
@@ -211,7 +211,7 @@ class DatabaseValidator:
         Returns:
             bool: True if database is ready and writable
         """
-        if not self.db:
+        if self.db is None:
             logger.error("❌ Database not initialized")
             return False
 
@@ -251,7 +251,7 @@ class DatabaseValidator:
         }
 
         try:
-            if not self.db:
+            if self.db is None:
                 diagnostics["errors"].append("Database not initialized")
                 return diagnostics
 

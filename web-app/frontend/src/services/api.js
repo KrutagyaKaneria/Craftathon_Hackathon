@@ -1,15 +1,22 @@
 import axios from 'axios';
 
 // Backend API URL - Configure with your machine IP
-const BACKEND_IP = import.meta.env.VITE_API_URL || '10.145.246.155:5000/api';
-const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://10.145.246.155:8000';
+const BACKEND_IP = import.meta.env.VITE_API_URL || 'http://10.44.202.155:5000/api';
+const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://10.44.202.155:8000';
+
+// Log API configuration on startup
+console.log('🔧 API Configuration:');
+console.log('  Backend:', BACKEND_IP);
+console.log('  AI Service:', AI_SERVICE_URL);
 
 const backendApi = axios.create({
   baseURL: BACKEND_IP,
+  timeout: 10000, // 10 second timeout
 });
 
 const aiApi = axios.create({
   baseURL: AI_SERVICE_URL,
+  timeout: 30000, // 30 second timeout for AI operations
 });
 
 // ============================================
@@ -38,6 +45,16 @@ backendApi.interceptors.request.use(
 backendApi.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Log detailed error info for debugging
+    console.error('❌ API Response Error:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      message: error.message,
+      url: error.config?.url,
+      data: error.response?.data,
+      code: error.code
+    });
+
     if (error.response?.status === 401) {
       console.error('❌ Unauthorized - token may have expired');
       // Clear token and redirect to login if needed
@@ -49,12 +66,39 @@ backendApi.interceptors.response.use(
 );
 
 const getErrorMessage = (error, fallback) => {
+  // Handle network errors
+  if (!error.response) {
+    const networkError = `Network Error: ${error.message}`;
+    console.error('🌐 ' + networkError);
+    console.error('   Please check if backend is running at:', BACKEND_IP);
+    return `${networkError} - Backend unavailable. Check IP configuration.`;
+  }
+
+  // Handle response errors
   const detail = error?.response?.data?.detail || error?.response?.data?.message;
   if (Array.isArray(detail)) {
     return detail.map((entry) => entry?.msg || 'Validation error').join(', ');
   }
   return detail || error?.message || fallback;
 };
+
+// Add error interceptor for AI Service API
+aiApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('❌ AI Service Error:', {
+      status: error.response?.status,
+      message: error.message,
+      url: error.config?.url,
+      code: error.code
+    });
+
+    if (!error.response) {
+      console.error('   Please check if AI Service is running at:', AI_SERVICE_URL);
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const apiService = {
   // Set authentication token

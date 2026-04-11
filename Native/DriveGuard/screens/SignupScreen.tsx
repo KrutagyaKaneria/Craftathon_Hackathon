@@ -64,13 +64,16 @@ export default function SignupScreen() {
       return;
     }
 
+    console.log('🔐 Attempting signup with:', data.email);
     const result = await signup(data.email, data.password);
 
     if (result.success) {
       // Navigate to Dashboard/Home
       router.replace('/(tabs)');
     } else {
-      Alert.alert('Signup Failed', result.error || 'An error occurred');
+      const errorMsg = result.error || error || 'Signup failed - please try again';
+      console.error('❌ Signup error to show user:', errorMsg);
+      Alert.alert('Signup Failed', errorMsg);
     }
   };
 

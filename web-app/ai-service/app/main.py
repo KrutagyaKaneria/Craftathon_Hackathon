@@ -83,9 +83,10 @@ allowed_origins = [
     "http://127.0.0.1:5173",
     "http://127.0.0.1:8081",
     # Local network IPs (for mobile testing)
-    # Add your machine IP here when testing from mobile:
-    # "http://192.168.x.x:3000"
-    # "http://10.x.x.x:3000"
+    "http://10.44.202.155:3000",
+    "http://10.44.202.155:5173",
+    "http://10.44.202.155:8081",
+    "http://10.44.202.155:5000",
 ]
 
 # Add environment-specific origins
