@@ -11,7 +11,6 @@ import sessionRoutes from './routes/sessionRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
 import { connectDB } from './config/database.js';
 import { validateDatabaseSetup, isDatabaseReadyForSessions } from './utils/databaseValidator.js';
-import { ipWhitelist } from './config/ipWhitelist.js';
 
 import http from 'http';
 import { initSocket } from './utils/socketHandler.js';
@@ -27,9 +26,9 @@ const PORT = process.env.PORT || 5000;
 initSocket(server);
 
 // Middleware
-// 🔒 CORS Configuration - Using IP Whitelist
+// 🔒 CORS Configuration - Allow all origins for mobile app testing
 app.use(cors({
-  origin: ipWhitelist.getCorsCallback(process.env.NODE_ENV !== 'production'),
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

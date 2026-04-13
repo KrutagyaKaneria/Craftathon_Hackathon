@@ -32,6 +32,7 @@ class IPWhitelist {
     ];
 
     this.defaultLocalPatterns = [
+      '10.44.202.155',
       '192.168.',     // Private network
       '10.',          // Private network
       '172.16.',      // Private network

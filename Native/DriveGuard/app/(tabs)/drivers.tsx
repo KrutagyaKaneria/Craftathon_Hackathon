@@ -1025,23 +1025,51 @@ export default function DriversScreen() {
     }
     try {
       setIsSubmitting(true);
-      const response = await apiClient.put(`/api/drivers/${editingDriverId}`, {
-        ownerId,
+      console.log('🔐 FACE VERIFICATION - Updating driver:', editingDriverId);
+      console.log('   Data:', {
         firstName: editFormData.firstName,
         lastName: editFormData.lastName,
         email: editFormData.email,
         phone: editFormData.phone,
       });
 
+      const updatePayload = {
+        ownerId,
+        firstName: editFormData.firstName,
+        lastName: editFormData.lastName,
+        email: editFormData.email,
+        phone: editFormData.phone,
+      };
+
+      console.log('📤 Sending update request to backend...');
+      console.log('   URL: /api/drivers/' + editingDriverId);
+      console.log('   Timeout: 60000ms');
+
+      const response = await apiClient.put(`/api/drivers/${editingDriverId}`, updatePayload);
+
+      console.log('✅ UPDATE RESPONSE:', response.status);
+      console.log('   Data:', response.data);
+
       if (response.data.success) {
-        Alert.alert('Success', 'Driver updated successfully!');
+        Alert.alert('Success', 'Driver verified and updated successfully!');
         setEditFormData({ firstName: '', lastName: '', email: '', phone: '', password: '' });
         setIsEditModalVisible(false);
         setEditingDriverId(null);
         await fetchDrivers();
+      } else {
+        Alert.alert('Error', response.data.message || 'Failed to verify and update driver');
       }
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to update driver');
+      console.error('❌ FACE VERIFICATION FAILED:', {
+        url: `/api/drivers/${editingDriverId}`,
+        message: error.message,
+        status: error.response?.status,
+        responseData: error.response?.data,
+        code: error.code
+      });
+      
+      const errorMsg = error.response?.data?.message || error.message || 'Failed to update driver';
+      Alert.alert('Error', `Face Verification Failed\n\n${errorMsg}\n\nMake sure backend is running and accessible at http://10.44.202.155:5000`);
     } finally {
       setIsSubmitting(false);
     }

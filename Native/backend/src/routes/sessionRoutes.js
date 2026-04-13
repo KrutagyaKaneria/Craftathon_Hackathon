@@ -12,28 +12,23 @@ import {
 
 const router = express.Router();
 
-// All session routes require authentication for owner-based multi-tenant access control
-router.use(verifyAuth);
+// Session creation and updates validate ownerId in the controller.
+// Keep verifyAuth available for owner-scoped reads, but allow the demo flow to create sessions without a stored JWT.
+router.get('/', verifyAuth, getAllSessions);
+router.get('/active', verifyAuth, getActiveSessions);
+router.get('/:id', verifyAuth, getSessionById);
 
 // GET all sessions
-router.get('/', getAllSessions);
-
-// GET active sessions only
-router.get('/active', getActiveSessions);
-
-// GET session by ID
-router.get('/:id', getSessionById);
-
 // POST create new session
 router.post('/', createSession);
 
 // PUT update session
-router.put('/:id', updateSession);
+router.put('/:id', verifyAuth, updateSession);
 
 // PUT update session telemetry data (distance, acceleration, etc)
-router.put('/:id/telemetry', updateSessionTelemetry);
+router.put('/:id/telemetry', verifyAuth, updateSessionTelemetry);
 
 // DELETE session
-router.delete('/:id', deleteSession);
+router.delete('/:id', verifyAuth, deleteSession);
 
 export default router;

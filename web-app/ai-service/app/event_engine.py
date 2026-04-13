@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 import httpx
+import asyncio
+import cv2
 from asyncio import create_task
 from app.config import settings
 from app.utils import logger
@@ -7,6 +9,82 @@ from app.db import insert_event
 from app.socket_client import socket_manager
 from app.memory_manager import get_alert_state, set_alert_state
 from app.alert_retry import send_alert_with_retry
+from app.fatigue import detect_fatigue
+
+_monitor_stop_events: dict[str, asyncio.Event] = {}
+
+
+def _monitor_id(driver_id: str, vehicle_id: str, session_id: str | None = None) -> str:
+    if session_id:
+        return session_id
+    return f"{driver_id}:{vehicle_id}"
+
+
+def is_monitor_active(driver_id: str, vehicle_id: str, session_id: str | None = None) -> bool:
+    monitor_id = _monitor_id(driver_id, vehicle_id, session_id)
+    return monitor_id in _monitor_stop_events
+
+
+def stop_safety_monitor(driver_id: str, vehicle_id: str, session_id: str | None = None) -> bool:
+    monitor_id = _monitor_id(driver_id, vehicle_id, session_id)
+    stop_event = _monitor_stop_events.get(monitor_id)
+    if not stop_event:
+        return False
+    stop_event.set()
+    return True
+
+
+async def start_safety_monitor(driver_id: str, vehicle_id: str, session_id: str | None = None):
+    """
+    Runs fatigue monitoring loop for a driving session.
+    Uses cooperative async yielding to prevent event-loop starvation.
+    """
+    monitor_id = _monitor_id(driver_id, vehicle_id, session_id)
+
+    if monitor_id in _monitor_stop_events:
+        logger.warning(f"Safety monitor already running for {monitor_id}")
+        return
+
+    stop_event = asyncio.Event()
+    _monitor_stop_events[monitor_id] = stop_event
+
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        logger.error(f"Could not open camera for monitor {monitor_id}")
+        _monitor_stop_events.pop(monitor_id, None)
+        return
+
+    logger.info(f"Safety monitor started for session {monitor_id}")
+
+    try:
+        while not stop_event.is_set():
+            # Camera frame grab is blocking I/O, so run it in a worker thread.
+            ret, frame = await asyncio.to_thread(cap.read)
+            if not ret:
+                await asyncio.sleep(0.05)
+                continue
+
+            fatigue_result = detect_fatigue(frame, monitor_id)
+            if fatigue_result.get("event"):
+                fatigue_score = fatigue_result.get("fatigue_score", 0.0)
+                severity = "high" if fatigue_score > 0.7 else "medium" if fatigue_score >= 0.4 else "low"
+                await process_event(
+                    driver_id=driver_id,
+                    session_id=monitor_id,
+                    event_type="fatigue",
+                    subtype=fatigue_result["event"],
+                    severity=severity,
+                    metrics=fatigue_result["metrics"],
+                )
+
+            # Critical cooperative pause to avoid event loop starvation.
+            await asyncio.sleep(0.01)
+    except Exception as exc:
+        logger.error(f"Safety monitor crashed for {monitor_id}: {exc}")
+    finally:
+        cap.release()
+        _monitor_stop_events.pop(monitor_id, None)
+        logger.info(f"Safety monitor stopped for session {monitor_id}")
 
 def _state_key(driver_id: str, session_id: str, event_type: str, subtype: str) -> str:
     return f"{driver_id}:{session_id}:{event_type}:{subtype}"

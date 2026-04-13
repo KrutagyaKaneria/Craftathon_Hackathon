@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
 
 from app.utils import decode_image_base64, logger
 from app.fatigue import detect_fatigue
 from app.rash import detect_rash
-from app.event_engine import process_event
+from app.event_engine import process_event, start_safety_monitor, stop_safety_monitor, is_monitor_active
 from app.face_verify import verify_face
 from app.socket_client import socket_manager
 from app.memory_manager import alert_state_manager, cleanup_on_session_end
@@ -39,6 +39,11 @@ class AnalyzeRequest(BaseModel):
 class FaceVerifyRequest(BaseModel):
     stored_image: str
     captured_image: str
+
+class StartSessionRequest(BaseModel):
+    driverId: str
+    vehicleId: str
+    sessionId: Optional[str] = None
 
 # --- Endpoints ---
 
@@ -99,6 +104,12 @@ async def handle_session_ended(payload: dict):
     logger.info(f"🧹 Cleaning up alert state for session_id: {session_id}, driver_id: {driver_id}")
     
     try:
+        # Stop any in-flight camera monitor loop for this session.
+        if driver_id:
+            monitor_stopped = stop_safety_monitor(driver_id, payload.get("vehicle_id", "unknown"), session_id)
+            if monitor_stopped:
+                logger.info(f"⏹️  Monitoring loop stop requested for session_id: {session_id}")
+
         # Clean up all alert states associated with this session
         cleanup_on_session_end(session_id)
         logger.info(f"✅ Alert state cleanup complete for session_id: {session_id}")
@@ -112,6 +123,40 @@ async def handle_session_ended(payload: dict):
     except Exception as e:
         logger.error(f"❌ Error during session cleanup: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+
+@router.post("/api/sessions/start")
+async def start_driving_session(payload: StartSessionRequest, background_tasks: BackgroundTasks):
+    """
+    Starts AI monitoring in the background so the API response returns immediately.
+    """
+    monitor_running = is_monitor_active(payload.driverId, payload.vehicleId, payload.sessionId)
+    if monitor_running:
+        return {
+            "success": True,
+            "message": "AI Monitoring already running",
+            "session_info": {
+                "driverId": payload.driverId,
+                "vehicleId": payload.vehicleId,
+                "sessionId": payload.sessionId,
+            },
+        }
+
+    background_tasks.add_task(
+        start_safety_monitor,
+        payload.driverId,
+        payload.vehicleId,
+        payload.sessionId,
+    )
+
+    return {
+        "success": True,
+        "message": "AI Monitoring initiated",
+        "session_info": {
+            "driverId": payload.driverId,
+            "vehicleId": payload.vehicleId,
+            "sessionId": payload.sessionId,
+        },
+    }
 
 @router.post("/fatigue")
 async def handle_fatigue(payload: FatigueRequest):

@@ -40,6 +40,7 @@ const Dashboard = () => {
   const gasPressed = useRef(false);
   const brakePressed = useRef(false);
   const virtualSpeedRef = useRef(0);
+  const telemetryTickRef = useRef(0);
 
   const driverId = verifiedDriver?._id || verifiedDriver?.id;
   const sessionId = session?._id || session?.session_id;
@@ -122,6 +123,8 @@ const Dashboard = () => {
     let interval;
     if (isRunning) {
       interval = setInterval(() => {
+        telemetryTickRef.current += 1;
+
         setStats((prev) => {
           const nextSeconds = prev.seconds + 1;
           const nextMinutes = prev.minutes + Math.floor(nextSeconds / 60);
@@ -136,7 +139,7 @@ const Dashboard = () => {
         });
 
         // Send sensor telemetry every 3 seconds
-        if (nextSeconds % 3 === 0) {
+        if (telemetryTickRef.current % 3 === 0) {
           const state = useAppStore.getState();
           telemetryService.sendSensorData(driverId, sessionId, {
             acceleration: state.acceleration,
@@ -148,7 +151,7 @@ const Dashboard = () => {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isRunning]);
+  }, [isRunning, driverId, sessionId]);
 
   // Physics Engine
   useEffect(() => {
@@ -307,10 +310,10 @@ const Dashboard = () => {
   if (!verifiedDriver || !selectedVehicle || !session) return null;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0c] text-zinc-100 font-sans p-4 overflow-hidden h-screen flex flex-col">
+    <div className="min-h-screen bg-[#0a0a0c] text-zinc-100 font-sans p-3 md:p-4 h-screen flex flex-col overflow-y-auto">
       {/* HEADER SECTION */}
-      <header className="max-w-[1600px] w-full mx-auto flex items-center justify-between mb-6 px-6 py-4 bg-zinc-900/50 backdrop-blur-md rounded-2xl border border-zinc-800/50 shadow-2xl">
-        <div className="flex items-center gap-4">
+      <header className="max-w-[1600px] w-full mx-auto flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-4 md:mb-6 px-4 md:px-6 py-4 bg-zinc-900/50 backdrop-blur-md rounded-2xl border border-zinc-800/50 shadow-2xl">
+        <div className="flex items-center gap-3 md:gap-4 w-full lg:w-auto">
           <img 
             src={verifiedDriver.profilePhoto || '/default-avatar.png'} 
             alt={verifiedDriver.firstName}
@@ -324,7 +327,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-12">
+        <div className="flex items-center gap-6 md:gap-12 w-full lg:w-auto justify-between lg:justify-start">
           <div className="text-center group">
             <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mb-1 group-hover:text-zinc-300 transition-colors">Distance</p>
             <p className="text-2xl font-mono font-bold text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
@@ -339,7 +342,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start">
           <div className="flex items-center gap-2 mr-4 bg-zinc-950/50 px-3 py-1.5 rounded-full border border-zinc-800">
             <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
             <span className="text-[10px] font-black text-zinc-400 tracking-tighter uppercase">{wsConnected ? 'Network Connected' : 'Offline'}</span>
@@ -354,10 +357,10 @@ const Dashboard = () => {
       </header>
 
       {/* MAIN DASHBOARD GRID */}
-      <main className="max-w-[1600px] w-full mx-auto grid grid-cols-[300px_1fr_300px] gap-6 flex-1 min-h-0">
+      <main className="max-w-[1600px] w-full mx-auto grid grid-cols-1 lg:grid-cols-[300px_1fr_300px] gap-4 md:gap-6 flex-1 min-h-0">
         
         {/* LEFT COLUMN: KEY DETAIL CARDS */}
-        <div className="space-y-4 overflow-auto custom-scrollbar pr-2 pb-4">
+        <div className="space-y-4 overflow-visible lg:overflow-auto custom-scrollbar pr-0 lg:pr-2 pb-2 lg:pb-4 order-2 lg:order-1">
           <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 shadow-xl group hover:border-zinc-700 transition-all">
             <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Session Identifier</p>
             <p className="text-xs font-mono text-zinc-400 break-all opacity-80 group-hover:opacity-100 transition-opacity">
@@ -411,15 +414,22 @@ const Dashboard = () => {
         </div>
 
         {/* CENTER COLUMN */}
-        <div className="flex flex-col gap-6 min-h-0 overflow-hidden">
+        <div className="flex flex-col gap-4 md:gap-6 min-h-0 overflow-visible lg:overflow-hidden order-1 lg:order-2">
           {/* FACE SCREEN */}
-          <div className="relative aspect-video rounded-3xl overflow-hidden border-2 border-zinc-800 bg-black shadow-2xl group transition-all duration-500 hover:border-zinc-700 flex-1">
-            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover opacity-90" />
+          <div className="relative aspect-video rounded-3xl overflow-hidden border-2 border-zinc-800 bg-black shadow-2xl group transition-all duration-500 hover:border-zinc-700 flex-1 min-h-[220px] md:min-h-0">
+            <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover opacity-90" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
             <div className="absolute top-4 left-6 flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-red-500 animate-pulse' : 'bg-zinc-600'}`}></div>
               <span className="text-[10px] font-black text-white/80 tracking-widest uppercase">Safety Monitoring Feed</span>
             </div>
+            {!cameraError && !isStreaming && (
+              <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
+                <p className="bg-zinc-900/80 backdrop-blur-md text-zinc-200 font-semibold py-3 px-6 rounded-2xl border border-zinc-700 shadow-2xl">
+                  Waiting for camera stream...
+                </p>
+              </div>
+            )}
             {cameraError && (
               <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
                 <p className="bg-red-600/90 backdrop-blur-md text-white font-bold py-3 px-6 rounded-2xl border border-red-500 shadow-2xl">
@@ -430,7 +440,7 @@ const Dashboard = () => {
           </div>
 
           {/* CONTROLS ROW */}
-          <div className="px-10 py-8 bg-zinc-900/80 rounded-[40px] border border-zinc-800/80 shadow-2xl relative overflow-hidden flex items-center justify-between shrink-0">
+          <div className="px-4 md:px-10 py-5 md:py-8 bg-zinc-900/80 rounded-[28px] md:rounded-[40px] border border-zinc-800/80 shadow-2xl relative overflow-hidden flex items-center justify-between gap-3 md:gap-6 shrink-0">
             {/* Decal Background */}
             <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none"></div>
 
@@ -440,6 +450,9 @@ const Dashboard = () => {
               onMouseDown={(e) => { e.preventDefault(); brakePressed.current = true; gasPressed.current = false; }}
               onMouseUp={(e) => { e.preventDefault(); brakePressed.current = false; }}
               onMouseLeave={(e) => { e.preventDefault(); brakePressed.current = false; }}
+              onPointerDown={(e) => { e.preventDefault(); brakePressed.current = true; gasPressed.current = false; }}
+              onPointerUp={(e) => { e.preventDefault(); brakePressed.current = false; }}
+              onPointerCancel={() => { brakePressed.current = false; }}
             >
               <div className={`relative w-full h-[100px] rounded-[15px] bg-gradient-to-b from-[#f2f2f2] to-[#b3b3b3] border-[2.5px] border-[#808080] shadow-[0_4px_8px_rgba(0,0,0,0.6)] flex flex-col items-center py-2 z-10 box-border ${brakePressed.current ? 'border-b-[3px] translate-y-[4px]' : 'border-b-[8px] translate-y-0'}`}>
                 <div className="grid grid-cols-2 gap-2 mt-2">
@@ -450,26 +463,26 @@ const Dashboard = () => {
             </div>
 
             {/* RPM Meter */}
-            <div className="relative w-40 h-40 bg-zinc-950 rounded-full border-[6px] border-zinc-800 shadow-inner flex items-center justify-center">
+            <div className="relative w-28 h-28 md:w-40 md:h-40 bg-zinc-950 rounded-full border-[6px] border-zinc-800 shadow-inner flex items-center justify-center">
               <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
                 <path d="M 20 80 A 40 40 0 1 1 80 80" fill="none" stroke="#27272a" strokeWidth="6" />
                 <path d="M 75 30 A 40 40 0 0 1 80 80" fill="none" stroke="#ef4444" strokeWidth="6" />
               </svg>
               <div className="text-center z-10 translate-y-2">
-                <p className="text-3xl font-mono font-black text-white">{calibratedRpm}</p>
+                <p className="text-xl md:text-3xl font-mono font-black text-white">{calibratedRpm}</p>
                 <p className="text-[10px] font-black text-zinc-500 tracking-[0.3em]">RPM</p>
               </div>
               <div className="absolute w-1 h-[65px] bg-red-500 origin-bottom rounded-full shadow-lg transition-transform duration-75" style={{ bottom: '50%', transform: `rotate(${-120 + (accelNorm * 240)}deg)` }}></div>
             </div>
 
             {/* Speed Meter */}
-            <div className="relative w-32 h-32 bg-zinc-950 rounded-full border-[5px] border-zinc-800 shadow-inner flex items-center justify-center">
+            <div className="relative w-24 h-24 md:w-32 md:h-32 bg-zinc-950 rounded-full border-[5px] border-zinc-800 shadow-inner flex items-center justify-center">
               <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
                 <path d="M 20 80 A 40 40 0 1 1 80 80" fill="none" stroke="#27272a" strokeWidth="5" />
                 <path d="M 75 30 A 40 40 0 0 1 80 80" fill="none" stroke="#ef4444" strokeWidth="5" />
               </svg>
               <div className="text-center z-10 translate-y-2">
-                <p className="text-2xl font-mono font-black text-emerald-400">{Math.round(virtualSpeed * 36)}</p>
+                <p className="text-lg md:text-2xl font-mono font-black text-emerald-400">{Math.round(virtualSpeed * 36)}</p>
                 <p className="text-[8px] font-black text-zinc-500 tracking-[0.2em]">KM/H</p>
               </div>
               <div className="absolute w-1 h-[50px] bg-red-500 origin-bottom rounded-full shadow-lg transition-transform duration-75" style={{ bottom: '50%', transform: `rotate(${-120 + ((virtualSpeed / 5) * 240)}deg)` }}></div>
@@ -481,6 +494,9 @@ const Dashboard = () => {
               onMouseDown={(e) => { e.preventDefault(); gasPressed.current = true; brakePressed.current = false; }}
               onMouseUp={(e) => { e.preventDefault(); gasPressed.current = false; }}
               onMouseLeave={(e) => { e.preventDefault(); gasPressed.current = false; }}
+              onPointerDown={(e) => { e.preventDefault(); gasPressed.current = true; brakePressed.current = false; }}
+              onPointerUp={(e) => { e.preventDefault(); gasPressed.current = false; }}
+              onPointerCancel={() => { gasPressed.current = false; }}
             >
               <div className={`relative w-full h-[100px] rounded-[15px] bg-gradient-to-b from-[#f2f2f2] to-[#b3b3b3] border-[2.5px] border-[#808080] shadow-[0_4px_8px_rgba(0,0,0,0.6)] flex flex-col items-center py-2 z-10 box-border ${gasPressed.current ? 'border-b-[3px] translate-y-[4px]' : 'border-b-[8px] translate-y-0'}`}>
                 <div className="grid grid-cols-2 gap-2 mt-2">
@@ -493,7 +509,7 @@ const Dashboard = () => {
         </div>
 
         {/* RIGHT COLUMN: AI TELEMETRY */}
-        <div className="space-y-4 overflow-auto custom-scrollbar pr-2 pb-4">
+        <div className="space-y-4 overflow-visible lg:overflow-auto custom-scrollbar pr-0 lg:pr-2 pb-2 lg:pb-4 order-3">
           <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 shadow-xl">
             <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Eye Aspect Ratio (EAR)</p>
             <p className="text-3xl font-mono font-black text-white">{fatigueDebug?.metrics?.ear ?? "0.00"}</p>

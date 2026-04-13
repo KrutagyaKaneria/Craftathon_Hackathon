@@ -275,15 +275,46 @@ export default function AssignVehicleScreen() {
   const fetchVehicles = async () => {
     setIsLoading(true);
     try {
-      console.log('🚗 Fetching vehicles for assign...');
-      const response = await apiClient.get('/api/vehicles');
+      console.log('🚗 FETCHING VEHICLES FOR ASSIGNMENT...');
+      console.log('   Endpoint: /api/vehicles/native/available (authenticated)');
+      console.log('   Driver ID:', driverId);
+      
+      // Use the native app endpoint that filters by authenticated owner
+      const response = await apiClient.get('/api/vehicles/native/available');
+      
+      console.log('✅ VEHICLE FETCH RESPONSE:', response.status);
+      console.log('   Total vehicles:', response.data?.data?.length || 0);
+      console.log('   Success:', response.data?.success);
+      
       if (response.data.success) {
-        setVehicles(response.data.data || []);
-        console.log('✅ Vehicles fetched:', response.data.data?.length);
+        const vehicleList = response.data.data || [];
+        setVehicles(vehicleList);
+        
+        if (vehicleList.length > 0) {
+          console.log('🚌 Available Vehicles:');
+          vehicleList.slice(0, 3).forEach((v, i) => {
+            console.log(`  [${i+1}] ${v.vehicle_name} (${v.vehicle_number}) - Status: ${v.status}`);
+          });
+        } else {
+          console.warn('⚠️ No vehicles found for your account');
+          console.warn('   Action: Create vehicles in the web app first, or contact admin');
+        }
+      } else {
+        console.error('❌ API returned success=false:', response.data.message);
+        throw new Error(response.data.message || 'Failed to fetch vehicles');
       }
     } catch (error: any) {
-      console.error('❌ Error fetching vehicles:', error.message);
-      Alert.alert('Error', 'Failed to fetch vehicles');
+      console.error('❌ ERROR FETCHING VEHICLES:', {
+        url: '/api/vehicles/native/available',
+        message: error.message,
+        status: error.response?.status,
+        responseData: error.response?.data,
+        code: error.code
+      });
+      Alert.alert(
+        'Error',
+        `Failed to fetch vehicles\n\n${error.response?.data?.message || error.message}\n\nEnsure:\n• Backend is running\n• You own at least one vehicle\n• Vehicle belongs to your account`
+      );
     } finally {
       setIsLoading(false);
     }

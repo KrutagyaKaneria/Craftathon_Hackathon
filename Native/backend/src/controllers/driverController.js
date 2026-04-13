@@ -349,6 +349,11 @@ export const updateDriver = async (req, res) => {
     const ownerId = req.ownerId || req.query.ownerId;
 
     console.log('📝 Updating driver:', id);
+    console.log('   Request body keys:', Object.keys(req.body));
+    console.log('   Has profilePhoto?', !!req.body.profilePhoto);
+    if (req.body.profilePhoto) {
+      console.log('   Profile photo size:', (req.body.profilePhoto.length / 1024 / 1024).toFixed(2), 'MB');
+    }
 
     if (!ownerId) {
       return res.status(401).json({
@@ -381,6 +386,7 @@ export const updateDriver = async (req, res) => {
     delete req.body.password;
     delete req.body.ownerId;
 
+    console.log('✅ Validation passed, updating driver in database...');
     const updatedDriver = await Driver.findByIdAndUpdate(
       id,
       req.body,
@@ -388,7 +394,7 @@ export const updateDriver = async (req, res) => {
     )
       .select('-password');
 
-    console.log('✅ Driver updated:', id);
+    console.log('✅ Driver updated successfully:', id);
 
     return res.status(200).json({
       success: true,
@@ -396,7 +402,11 @@ export const updateDriver = async (req, res) => {
       message: 'Driver updated successfully'
     });
   } catch (error) {
-    console.error('❌ Update driver error:', error);
+    console.error('❌ Update driver error:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack.split('\n').slice(0, 3).join('\n')
+    });
     return res.status(500).json({
       success: false,
       message: 'Failed to update driver',

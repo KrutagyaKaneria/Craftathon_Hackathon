@@ -30,7 +30,7 @@ class APIConfigManager {
 
     return {
       baseURL: apiUrl,
-      timeout: 30000,
+      timeout: 60000,
       isDevelopment: process.env.NODE_ENV !== 'production' || process.env.EXPO_PUBLIC_DEBUG === 'true',
     };
   }

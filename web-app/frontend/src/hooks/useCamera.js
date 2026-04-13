@@ -12,16 +12,25 @@ export const useCamera = ({ driverId, sessionId, onFatigueUpdate, onFatigueError
 
   const startCamera = async () => {
     try {
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        throw new Error('Camera API is unavailable in this browser/context. Open via localhost or HTTPS.');
+      }
+
       setCameraError('');
       const stream = await cameraUtils.requestCamera();
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        if (typeof videoRef.current.play === 'function') {
+          await videoRef.current.play().catch(() => {
+            // Some browsers block autoplay; stream still gets attached.
+          });
+        }
         setCameraStream(stream);
         setIsStreaming(true);
       }
     } catch (error) {
       console.error('Failed to start camera:', error);
-      const message = 'Camera access denied. Please enable camera permission and retry.';
+      const message = error?.message || 'Camera access denied. Please enable camera permission and retry.';
       setCameraError(message);
       addAlert({ type: 'error', severity: 'high', message });
     }

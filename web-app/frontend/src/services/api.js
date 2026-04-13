@@ -26,12 +26,18 @@ backendApi.interceptors.request.use(
   (config) => {
     // Get token from localStorage
     const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    const requestUrl = config.url || '';
     
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
       console.log('✅ Auth token added to request:', token.substring(0, 20) + '...');
     } else {
-      console.warn('⚠️ No auth token found in storage');
+      const isPublicRequest = requestUrl.includes('/auth/') || requestUrl.includes('/drivers/public/') || requestUrl.includes('/vehicles/public/');
+      if (isPublicRequest) {
+        console.log('ℹ️ Public request without auth token');
+      } else {
+        console.warn('⚠️ No auth token found in storage');
+      }
     }
     
     return config;
@@ -277,9 +283,13 @@ export const apiService = {
       if (!ownerId) {
         throw new Error('Owner ID is required to fetch vehicles');
       }
-      // Use public endpoint - no authentication required
-      const url = `/vehicles/public/available?status=available&ownerId=${ownerId}`;
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      const url = token
+        ? `/vehicles/native/available?ownerId=${ownerId}`
+        : `/vehicles/public/available?ownerId=${ownerId}`;
+
       console.log('📥 Fetching available vehicles for owner:', ownerId);
+      console.log('   Route:', token ? 'authenticated/native' : 'public');
       const response = await backendApi.get(url);
       const vehicles = response.data?.data || response.data || [];
       console.log('✅ Available vehicles fetched:', vehicles.length);

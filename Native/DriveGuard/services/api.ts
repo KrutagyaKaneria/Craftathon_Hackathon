@@ -78,17 +78,45 @@ apiClient.interceptors.response.use(
 export const authAPI = {
   login: async (email: string, password: string) => {
     try {
+      const loginURL = `${API_BASE_URL}/api/auth/login`;
+      console.log('🔐 LOGIN ATTEMPT');
+      console.log(`   URL: ${loginURL}`);
+      console.log(`   Email: ${email}`);
+      console.log(`   Timeout: ${apiConfigManager.getConfig().timeout}ms`);
+      
+      // Pre-flight: Check if backend is reachable
+      console.log('📡 Pre-flight backend health check...');
+      try {
+        const healthCheck = await fetch(`${API_BASE_URL}/api/health`, { timeout: 5000 });
+        if (healthCheck.ok) {
+          console.log('✅ Backend is reachable - proceeding with login');
+        }
+      } catch (healthError) {
+        console.warn('⚠️ Backend health check failed, but attempting login anyway:', healthError);
+      }
+      
       const response = await apiClient.post('/api/auth/login', { email, password });
+      console.log('✅ LOGIN RESPONSE:', response.status);
       if (response.data.success && response.data.data.token) {
         const token = response.data.data.token;
         await safeStorage.setItem('authToken', token);
+        console.log('✅ Token saved, login successful');
         return response.data.data;
       }
       throw new Error(response.data.message || 'Login failed');
     } catch (error: any) {
+      console.error('❌ LOGIN ERROR:', {
+        url: `${API_BASE_URL}/api/auth/login`,
+        message: error.message,
+        status: error.response?.status,
+        responseData: error.response?.data,
+        code: error.code
+      });
       throw {
-        message: error.response?.data?.message || error.message || 'Login failed',
-        status: error.response?.status
+        message: error.response?.data?.message || error.message || 'Login failed - Request did not reach backend',
+        status: error.response?.status,
+        url: `${API_BASE_URL}/api/auth/login`,
+        troubleshoot: `Backend URL: ${API_BASE_URL}\nMake sure backend is running on this IP`
       };
     }
   },

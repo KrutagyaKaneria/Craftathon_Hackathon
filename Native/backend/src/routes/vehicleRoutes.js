@@ -23,6 +23,10 @@ const router = express.Router();
 // GET /api/vehicles/public/available?ownerId=xxx
 router.get('/public/available', getAllVehicles);
 
+// Lock/Allocate vehicle for the web demo flow.
+// The controller validates ownerId against the vehicle owner.
+router.post('/:id/lock', lockVehicle);
+
 // ============================================
 // NATIVE APP PROTECTED ROUTES (Auth required)
 // ============================================
@@ -53,10 +57,6 @@ router.post('/', createVehicle);
 // Update vehicle
 // PUT /api/vehicles/:id
 router.put('/:id', updateVehicle);
-
-// Lock/Allocate vehicle
-// POST /api/vehicles/:id/lock
-router.post('/:id/lock', lockVehicle);
 
 // Delete vehicle
 // DELETE /api/vehicles/:id

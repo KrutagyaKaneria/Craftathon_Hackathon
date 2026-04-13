@@ -17,8 +17,16 @@ export const getAllVehicles = async (req, res) => {
     // Check if this is a public request (no auth) or authenticated request
     const isAuthenticated = !!req.ownerId;
     const isPublicRoute = req.path === '/public/available' || req.baseUrl?.includes('/public/available');
+    const isNativeRoute = req.path === '/native/available' || req.baseUrl?.includes('/native/available');
 
     let ownerId = req.ownerId; // From JWT token (verifyAuth middleware)
+    
+    console.log(`\n🚗 VEHICLE FETCH REQUEST`);
+    console.log(`   Route: ${req.path}`);
+    console.log(`   Is Public: ${isPublicRoute}`);
+    console.log(`   Is Native: ${isNativeRoute}`);
+    console.log(`   Is Authenticated: ${isAuthenticated}`);
+    console.log(`   Owner ID from Token: ${ownerId}`);
     
     // If query parameter provided
     if (req.query.ownerId) {
@@ -31,6 +39,7 @@ export const getAllVehicles = async (req, res) => {
         });
       }
       ownerId = req.query.ownerId;
+      console.log(`   Using owner ID from query: ${ownerId}`);
     }
 
     // Public route requires ownerId in query parameter
@@ -51,7 +60,7 @@ export const getAllVehicles = async (req, res) => {
       });
     }
 
-    console.log(`${isPublicRoute ? '🌐 PUBLIC' : '🔐 AUTHENTICATED'} request - Getting vehicles for ownerId:`, ownerId);
+    console.log(`${isPublicRoute ? '🌐 PUBLIC' : '🔐 AUTHENTICATED'} request - Getting vehicles for ownerId: ${ownerId}`);
 
     // Query filters from request
     const { status, protocol_status, in_transit, search } = req.query;
@@ -70,7 +79,7 @@ export const getAllVehicles = async (req, res) => {
       ];
     }
 
-    console.log('🔍 Vehicle filter:', filter);
+    console.log('   Filters:', filter);
 
     // Fetch vehicles from database filtered by owner
     const vehicles = await Vehicle.find(filter)
@@ -78,14 +87,22 @@ export const getAllVehicles = async (req, res) => {
       .sort({ created_at: -1 })
       .lean();
 
-    console.log(`✅ Found ${vehicles.length} vehicles for owner ${ownerId}`);
+    console.log(`✅ Query complete - Found ${vehicles.length} vehicles`);
+    if (vehicles.length === 0) {
+      console.warn(`   ⚠️ No vehicles owned by this account (${ownerId})`);
+      console.warn('   → User needs to create vehicles first, or vehicles not assigned to this owner');
+    } else {
+      console.log('   Vehicle list:');
+      vehicles.slice(0, 3).forEach((v, i) => {
+        console.log(`     [${i+1}] ${v.vehicle_name} (${v.vehicle_number}) - Status: ${v.status} - Owner: ${v.ownerId}`);
+      });
+    }
 
     if (vehicles.length === 0) {
-      console.log('📭 No vehicles found for this owner');
       return res.status(200).json({
         success: true,
         data: [],
-        message: 'No vehicles available',
+        message: 'No vehicles available - create vehicles first',
         count: 0
       });
     }
@@ -101,7 +118,10 @@ export const getAllVehicles = async (req, res) => {
       count: vehicles.length
     });
   } catch (error) {
-    console.error('❌ Get all vehicles error:', error);
+    console.error('❌ Get all vehicles error:', {
+      message: error.message,
+      stack: error.stack.split('\n').slice(0, 3).join('\n')
+    });
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch vehicles',
@@ -442,7 +462,7 @@ export const lockVehicle = async (req, res) => {
   try {
     const { id } = req.params;
     const { driverId } = req.body;
-    const ownerId = req.ownerId || req.query.ownerId;
+    const ownerId = req.ownerId || req.query.ownerId || req.body.ownerId;
 
     console.log(`🔐 Attempting to lock vehicle ${id} for driver ${driverId}`);
 

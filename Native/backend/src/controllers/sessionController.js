@@ -20,8 +20,9 @@ import {
 
 export const getAllSessions = async (req, res) => {
   try {
-    // Get ownerId from authenticated token or query parameter
-    let ownerId = req.ownerId || req.user?.ownerId;
+    // Get ownerId from authenticated token, request body, or query parameter.
+    // The web demo flow passes ownerId in the body when no JWT is available.
+    let ownerId = req.ownerId || req.user?.ownerId || req.body.ownerId;
     if (req.query.ownerId) {
       // Verify it matches the authenticated owner
       if (req.ownerId && req.query.ownerId !== req.ownerId) {
@@ -146,8 +147,8 @@ export const createSession = async (req, res) => {
     }
     console.log('✅ STEP 2: Database is ready. Proceeding with session creation...');
 
-    // Get ownerId from authenticated token or query parameter
-    let ownerId = req.ownerId || req.user?.ownerId;
+    // Get ownerId from authenticated token, request body, or query parameter.
+    let ownerId = req.ownerId || req.user?.ownerId || req.body.ownerId;
     if (req.query.ownerId) {
       // Verify it matches the authenticated owner
       if (req.ownerId && req.query.ownerId !== req.ownerId) {
